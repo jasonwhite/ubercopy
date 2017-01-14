@@ -1,0 +1,14 @@
+[package]
+name = "ubercopy"
+version = "1.0.0"
+authors = ["Jason White"]
+description = "A tool to quickly and intelligently copy files based on a generated manifest"
+
+[dependencies]
+clap = "2.0"
+duct = "0.9"
+winapi = "0.2"
+kernel32-sys = "0.2"
+scoped-pool = "1"
+log = "0.3"
+log4rs = "0.7"
