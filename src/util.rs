@@ -21,6 +21,7 @@
 use std::path::{Path, Component};
 use std::fs;
 use std::io;
+use std::ffi;
 use std::thread;
 use std::time::Duration;
 
@@ -33,13 +34,21 @@ use winapi::winnt::{FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN};
 #[cfg(windows)]
 use winapi::winerror;
 #[cfg(windows)]
-use std::ffi::OsStr;
-#[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
+
+#[cfg(any(target_os = "linux", target_os = "emscripten"))]
+use libc::{stat64, lstat64, utimes, timeval};
+#[cfg(target_os = "android")]
+use libc::{stat as stat64, lstat as lstat64, utimes, timeval};
+
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
+use std::mem;
 
 /// Convert a string to UTF-16.
 #[cfg(windows)]
-fn to_u16s<S: AsRef<OsStr>>(s: S) -> Vec<u16> {
+fn to_u16s<S: AsRef<ffi::OsStr>>(s: S) -> Vec<u16> {
     let mut s : Vec<u16> = s.as_ref().encode_wide().collect();
     s.push(0);
     s
@@ -228,9 +237,58 @@ pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+fn lstat(p: &Path) -> io::Result<stat64> {
+    let p = ffi::CString::new(p.as_os_str().as_bytes())?;
+
+    let mut stat: stat64 = unsafe { mem::zeroed() };
+
+    let ret = unsafe { lstat64(p.as_ptr(), &mut stat as *mut stat64) };
+
+    if ret == -1 {
+        Err(io::Error::last_os_error())
+    }
+    else {
+        Ok(stat)
+    }
+}
+
+#[cfg(unix)]
+fn copy_timestamps(from: &Path, to: &Path) -> io::Result<()> {
+
+    let stat = lstat(from)?;
+
+    let to = ffi::CString::new(to.as_os_str().as_bytes())?;
+
+    let ret = unsafe {
+        let times: [timeval; 2] = [
+            {
+                tv_sec: stat.st_atime,
+                tv_usec: stat.st_atime_ns,
+            },
+            {
+                modtime: stat.st_mtime,
+            },
+        ];
+
+        utime(to.as_ptr(), &utim as *const utimbuf)
+    };
+
+    if ret == -1 {
+        Err(io::Error::last_os_error())
+    }
+    else {
+        Ok(())
+    }
+}
+
+#[cfg(unix)]
 pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
-    fs::copy(from, to)
+    let n = fs::copy(from, to)?;
+
+    copy_timestamps(from, to)?;
+
+    Ok(n)
 }
 
 /// Copies a file with a retry. When copying files across the network, this can
