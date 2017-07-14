@@ -1,5 +1,8 @@
 # Ubercopy
 
+[![Build Status](https://travis-ci.org/jasonwhite/ubercopy.svg?branch=master)](https://travis-ci.org/jasonwhite/ubercopy)
+[![Build status](https://ci.appveyor.com/api/projects/status/2b0sulel3c5lia0n/branch/master?svg=true)](https://ci.appveyor.com/project/jasonwhite/ubercopy/branch/master)
+
 Ubercopy is a program for synchronizing the files as listed in a manifest. This
 is similar to `rsync` or `robocopy`. However, neither `rsync` nor `robocopy`
 accept a list of files with explicit destination paths. They will only
