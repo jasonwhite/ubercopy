@@ -26,13 +26,15 @@ use std::time::Duration;
 
 #[cfg(windows)]
 use kernel32;
-
 #[cfg(windows)]
 use winapi::fileapi::INVALID_FILE_ATTRIBUTES;
+#[cfg(windows)]
 use winapi::winnt::{FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN};
+#[cfg(windows)]
 use winapi::winerror;
-
+#[cfg(windows)]
 use std::ffi::OsStr;
+#[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 
 /// Convert a string to UTF-16.
@@ -73,6 +75,11 @@ pub fn remove_dir(path: &Path) -> io::Result<()> {
         },
         Ok(()) => Ok(()),
     }
+}
+
+#[cfg(not(windows))]
+pub fn remove_dir(path: &Path) -> io::Result<()> {
+    fs::remove_dir(path)
 }
 
 /// Remove a directory with a retry.
@@ -130,7 +137,8 @@ fn unset_attributes(path: &Path) -> io::Result<()> {
 
 /// Wrapper for `fs::remove_file` to ignore the case where the file or path to
 /// the file does not exist.
-pub fn remove_file(path: &Path) -> io::Result<()> {
+#[cfg(windows)]
+fn remove_file(path: &Path) -> io::Result<()> {
     match fs::remove_file(path) {
         Err(err) => match err.kind() {
             // It's fine if the file already doesn't exist.
@@ -142,8 +150,8 @@ pub fn remove_file(path: &Path) -> io::Result<()> {
                     Err(err)
                 }
                 else {
-                    // Try again, but only once. We could get stuck in an infinite
-                    // loop if we ran this same function recursively.
+                    // Try again, but only once. Don't want to get into an
+                    // infinite loop.
                     fs::remove_file(path)
                 }
             },
@@ -159,6 +167,20 @@ pub fn remove_file(path: &Path) -> io::Result<()> {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn remove_file(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Err(err) => match err.kind() {
+            // It's fine if the file already doesn't exist.
+            io::ErrorKind::NotFound => Ok(()),
+
+            // Anything else is still an error.
+            _ => Err(err),
+        },
+        Ok(()) => Ok(())
     }
 }
 
@@ -182,6 +204,7 @@ pub fn remove_file_retry(path: &Path, retries: usize, delay: Duration) -> io::Re
 
 /// Wraps `fs::copy` to be able to fix 'hidden' and 'readonly' attributes on the
 /// `to` path.
+#[cfg(windows)]
 pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
     match fs::copy(from, to) {
         Err(err) => {
@@ -203,6 +226,11 @@ pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
         },
         Ok(n) => Ok(n),
     }
+}
+
+#[cfg(not(windows))]
+pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
+    fs::copy(from, to)
 }
 
 /// Copies a file with a retry. When copying files across the network, this can
