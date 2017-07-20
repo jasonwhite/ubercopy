@@ -24,6 +24,7 @@ extern crate duct;
 extern crate winapi;
 extern crate kernel32;
 extern crate scoped_pool;
+extern crate libc;
 
 mod args;
 mod copyop;
