@@ -37,9 +37,9 @@ use winapi::winerror;
 use std::os::windows::ffi::OsStrExt;
 
 #[cfg(any(target_os = "linux", target_os = "emscripten"))]
-use libc::{stat64, lstat64, utimes, timeval};
+use libc::{stat64, lstat64, utimensat, timespec, AT_FDCWD};
 #[cfg(target_os = "android")]
-use libc::{stat as stat64, lstat as lstat64, utimes, timeval};
+use libc::{stat as stat64, lstat as lstat64, utimensat, timespec, AT_FDCWD};
 
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
@@ -256,22 +256,23 @@ fn lstat(p: &Path) -> io::Result<stat64> {
 #[cfg(unix)]
 fn copy_timestamps(from: &Path, to: &Path) -> io::Result<()> {
 
-    let stat = lstat(from)?;
-
     let to = ffi::CString::new(to.as_os_str().as_bytes())?;
 
-    let ret = unsafe {
-        let times: [timeval; 2] = [
-            {
-                tv_sec: stat.st_atime,
-                tv_usec: stat.st_atime_ns,
-            },
-            {
-                modtime: stat.st_mtime,
-            },
-        ];
+    let stat = lstat(from)?;
 
-        utime(to.as_ptr(), &utim as *const utimbuf)
+    let times: [timespec; 2] = [
+        timespec {
+            tv_sec: stat.st_atime,
+            tv_nsec: stat.st_atime_nsec,
+        },
+        timespec {
+            tv_sec: stat.st_mtime,
+            tv_nsec: stat.st_mtime_nsec,
+        },
+    ];
+
+    let ret = unsafe {
+        utimensat(AT_FDCWD, to.as_ptr(), &times as *const timespec, 0)
     };
 
     if ret == -1 {
