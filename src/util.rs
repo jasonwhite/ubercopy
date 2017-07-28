@@ -38,7 +38,8 @@ use std::os::windows::ffi::OsStrExt;
 
 #[cfg(any(target_os = "linux", target_os = "emscripten"))]
 use libc::{stat64, lstat64, utimensat, timespec, AT_FDCWD};
-#[cfg(target_os = "android")]
+#[cfg(all(unix, not(any(target_os = "linux",
+                        target_os = "emscripten"))))]
 use libc::{stat as stat64, lstat as lstat64, utimensat, timespec, AT_FDCWD};
 
 #[cfg(unix)]
