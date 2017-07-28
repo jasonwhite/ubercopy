@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::path::{Path, Component};
+use std::path::{Path, PathBuf, Component, Prefix};
 use std::fs;
 use std::io;
 use std::ffi;
@@ -55,25 +55,6 @@ fn to_u16s<S: AsRef<ffi::OsStr>>(s: S) -> Vec<u16> {
     let mut s : Vec<u16> = s.as_ref().encode_wide().collect();
     s.push(0);
     s
-}
-
-/// Returns the parent of the given path if it can be removed. Returns None if
-/// the parent directory is a root or prefix component. These types of
-/// directories cannot be removed.
-pub fn removable_parent(path: &Path) -> Option<&Path> {
-    let mut comps = path.components();
-    comps.next_back().and_then(|p| {
-        match p {
-            Component::Normal(_) => {
-                let parent = comps.as_path();
-                match comps.next_back() {
-                    Some(Component::Normal(_)) => Some(parent),
-                    _ => None,
-                }
-            },
-            _ => None,
-        }
-    })
 }
 
 /// Wrapper for `remove_dir` to ignore certain types of errors.
@@ -122,7 +103,7 @@ pub fn remove_dir_retry(path: &Path, retries: usize, delay: Duration) -> io::Res
 pub fn remove_empty_dirs(path: &Path, retries: usize, delay: Duration) -> io::Result<()> {
     try!(remove_dir_retry(path, retries, delay));
 
-    if let Some(p) = removable_parent(path) {
+    if let Some(p) = path.removable_parent() {
         // Try to remove the parent directory as well.
         remove_empty_dirs(p, retries, delay)
     }
@@ -353,36 +334,229 @@ pub fn metadata_retry(path: &Path, retries: usize, delay: Duration) -> io::Resul
     }
 }
 
+pub trait PathExt {
+    /// Returns the parent of the given path if it can be removed. Returns None
+    /// if the parent directory is a root or prefix component. These types of
+    /// directories cannot be removed.
+    fn removable_parent(&self) -> Option<&Path>;
+
+    /// Returns a normalized path. This does not touch the file system at all.
+    fn norm(&self) -> PathBuf;
+
+    /// Returns `true` if the path is considered "sandboxed". That is, if its
+    /// first path component is a `Normal` component. The path is expected to
+    /// be normalized.
+    fn is_sandboxed(&self) -> bool;
+
+    /// Returns `true` if the path is empty.
+    fn is_empty(&self) -> bool;
+}
+
+impl PathExt for Path {
+
+    fn removable_parent(&self) -> Option<&Path> {
+        let mut comps = self.components();
+        comps.next_back().and_then(|p| {
+            match p {
+                Component::Normal(_) => {
+                    let parent = comps.as_path();
+                    match comps.next_back() {
+                        Some(Component::Normal(_)) => Some(parent),
+                        _ => None,
+                    }
+                },
+                _ => None,
+            }
+        })
+    }
+
+    fn norm(&self) -> PathBuf {
+        let mut new_path = PathBuf::new();
+
+        let mut components = self.components();
+
+        if self.as_os_str().len() >= 260 {
+            // If the path is >= 260 characters, we should prefix it with '\\?\' if
+            // possible.
+            if let Some(c) = components.next() {
+                match c {
+                    Component::CurDir => {},
+                    Component::RootDir |
+                    Component::ParentDir |
+                    Component::Normal(_) => {
+                        // Can't add the prefix. It's a relative path.
+                        new_path.push(c.as_os_str());
+                    },
+                    Component::Prefix(prefix) => {
+                        match prefix.kind() {
+                            Prefix::UNC(server, share) => {
+                                let mut p = ffi::OsString::from(r"\\?\UNC\");
+                                p.push(server);
+                                p.push(r"\");
+                                p.push(share);
+                                new_path.push(p);
+                            },
+                            Prefix::Disk(_) => {
+                                let mut p = ffi::OsString::from(r"\\?\");
+                                p.push(c.as_os_str());
+                                new_path.push(p);
+                            },
+                            _ => { new_path.push(c.as_os_str()); },
+                        };
+                    },
+                };
+            }
+        }
+
+        for c in components {
+            match c {
+                Component::CurDir => {},
+                Component::ParentDir => {
+                    let pop = match new_path.components().next_back() {
+                        Some(Component::Prefix(_)) | Some(Component::RootDir) => true,
+                        Some(Component::Normal(s)) => !s.is_empty(),
+                        _ => false,
+                    };
+
+                    if pop {
+                        new_path.pop();
+                    }
+                    else {
+                        new_path.push("..");
+                    }
+                },
+                _ => { new_path.push(c.as_os_str()); },
+            };
+        }
+
+        if new_path.as_os_str().is_empty() {
+            new_path.push(".");
+        }
+
+        new_path
+    }
+
+    fn is_sandboxed(&self) -> bool {
+        if let Some(c) = self.components().next() {
+            match c {
+                Component::CurDir => true,
+                Component::Normal(_) => true,
+                _ => false,
+            }
+        }
+        else {
+            // Nothing in the path. It can be considered sandboxed.
+            true
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.as_os_str().is_empty()
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_parent_dir2() {
-        assert_eq!(removable_parent(&Path::new("foo")), None);
-        assert_eq!(removable_parent(&Path::new("/foo")), None);
-        assert_eq!(removable_parent(&Path::new("/")), None);
-        assert_eq!(removable_parent(&Path::new("foo/bar")), Some(Path::new("foo")));
+    fn test_sandbox() {
+        assert!(Path::new("foo").is_sandboxed());
+        assert!(Path::new("./foo").is_sandboxed());
+        assert!(Path::new(".").is_sandboxed());
+        assert!(Path::new("").is_sandboxed());
+        assert!(!Path::new("../foo").is_sandboxed());
+        assert!(!Path::new("/foo").is_sandboxed());
+    }
+
+    #[test]
+    fn test_parent_dir() {
+        assert_eq!(Path::new("foo").removable_parent(), None);
+        assert_eq!(Path::new("/foo").removable_parent(), None);
+        assert_eq!(Path::new("/").removable_parent(), None);
+        assert_eq!(Path::new("foo/bar").removable_parent(), Some(Path::new("foo")));
     }
 
     #[test]
     #[cfg(windows)]
-    fn test_parent_dir2_win() {
-        assert_eq!(removable_parent(&Path::new(r"C:\foo\bar")),
+    fn test_parent_dir_win() {
+        assert_eq!(Path::new(r"C:\foo\bar").removable_parent(),
                    Some(Path::new(r"C:\foo")));
-        assert_eq!(removable_parent(&Path::new(r"C:\foo")), None);
-        assert_eq!(removable_parent(&Path::new(r"C:\")), None);
-        assert_eq!(removable_parent(&Path::new(r"\\?\C:\foo")), None);
-        assert_eq!(removable_parent(&Path::new(r"\\?\C:\")), None);
-        assert_eq!(removable_parent(&Path::new(r"\\?\C:\foo\bar")),
+        assert_eq!(Path::new(r"C:\foo").removable_parent(), None);
+        assert_eq!(Path::new(r"C:\").removable_parent(), None);
+        assert_eq!(Path::new(r"\\?\C:\foo").removable_parent(), None);
+        assert_eq!(Path::new(r"\\?\C:\").removable_parent(), None);
+        assert_eq!(Path::new(r"\\?\C:\foo\bar").removable_parent(),
                    Some(Path::new(r"\\?\C:\foo")));
-        assert_eq!(removable_parent(&Path::new(r"\\server\share")), None);
-        assert_eq!(removable_parent(&Path::new(r"\\server\share\foo")), None);
-        assert_eq!(removable_parent(&Path::new(r"\\server\share\foo\bar")),
+        assert_eq!(Path::new(r"\\server\share").removable_parent(), None);
+        assert_eq!(Path::new(r"\\server\share\foo").removable_parent(), None);
+        assert_eq!(Path::new(r"\\server\share\foo\bar").removable_parent(),
                    Some(Path::new(r"\\server\share\foo")));
-        assert_eq!(removable_parent(&Path::new(r"\\?\UNC\server\share")), None);
-        assert_eq!(removable_parent(&Path::new(r"\\?\UNC\server\share\foo")), None);
-        assert_eq!(removable_parent(&Path::new(r"\\?\UNC\server\share\foo\bar")),
+        assert_eq!(Path::new(r"\\?\UNC\server\share").removable_parent(), None);
+        assert_eq!(Path::new(r"\\?\UNC\server\share\foo").removable_parent(), None);
+        assert_eq!(Path::new(r"\\?\UNC\server\share\foo\bar").removable_parent(),
                    Some(Path::new(r"\\?\UNC\server\share\foo")));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_norm() {
+        assert_eq!(Path::new("../foo").parent(), Some(Path::new("..")));
+        assert_eq!(Path::new("foo").norm(), Path::new("foo"));
+        assert_eq!(Path::new("./foo").norm(), Path::new("foo"));
+        assert_eq!(Path::new(".").norm(), Path::new("."));
+        assert_eq!(Path::new("..").norm(), Path::new(".."));
+        assert_eq!(Path::new(r"..\..").norm(), Path::new(r"..\.."));
+        assert_eq!(Path::new(r"..\..\..").norm(), Path::new(r"..\..\.."));
+        assert_eq!(Path::new("").norm(), Path::new("."));
+        assert_eq!(Path::new("foo/bar").norm(), Path::new(r"foo\bar"));
+        assert_eq!(Path::new("C:/foo/../bar").norm(), Path::new(r"C:\bar"));
+        assert_eq!(Path::new("C:/../bar").norm(), Path::new(r"C:\bar"));
+        assert_eq!(Path::new("C:/../../bar").norm(), Path::new(r"C:\bar"));
+        assert_eq!(Path::new("foo//bar///").norm(), Path::new(r"foo\bar"));
+        assert_eq!(Path::new(r"\\server\share\..\foo").norm(), Path::new(r"\\server\share\foo"));
+        assert_eq!(Path::new(r"\\server\share\..\foo\..").norm(), Path::new(r"\\server\share"));
+        assert_eq!(Path::new(r"..\foo\..\..\bar").norm(), Path::new(r"..\..\bar"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_norm() {
+        assert_eq!(Path::new("../foo").parent(), Some(Path::new("..")));
+        assert_eq!(Path::new("foo").norm(), Path::new("foo"));
+        assert_eq!(Path::new("./foo").norm(), Path::new("foo"));
+        assert_eq!(Path::new(".").norm(), Path::new("."));
+        assert_eq!(Path::new("..").norm(), Path::new(".."));
+        assert_eq!(Path::new("../..").norm(), Path::new("../.."));
+        assert_eq!(Path::new("../../..").norm(), Path::new("../../.."));
+        assert_eq!(Path::new("").norm(), Path::new("."));
+        assert_eq!(Path::new("foo/bar").norm(), Path::new("foo/bar"));
+        assert_eq!(Path::new("/foo/../bar").norm(), Path::new("/bar"));
+        assert_eq!(Path::new("/../bar").norm(), Path::new("/bar"));
+        assert_eq!(Path::new("/../../bar").norm(), Path::new("/bar"));
+        assert_eq!(Path::new("foo//bar///").norm(), Path::new("foo/bar"));
+        assert_eq!(Path::new("../foo/../../bar").norm(), Path::new("../../bar"));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_norm_long_paths() {
+        use std::iter;
+
+        let long_name : String = iter::repeat('a').take(260).collect();
+        let long_name = long_name.as_str();
+
+        // Long paths
+        assert_eq!(PathBuf::from(String::from(r"C:\")+long_name).norm(),
+                   PathBuf::from(String::from(r"\\?\C:\")+long_name));
+        assert_eq!(PathBuf::from(String::from(r"\\server\share\")+long_name).norm(),
+                   PathBuf::from(String::from(r"\\?\UNC\server\share\")+long_name));
+
+        // Long relative paths
+        assert_eq!(PathBuf::from(String::from(r"..\relative\")+long_name).norm(),
+                   PathBuf::from(String::from(r"..\relative\")+long_name));
+        assert_eq!(PathBuf::from(String::from(r".\relative\")+long_name).norm(),
+                   PathBuf::from(String::from(r"relative\")+long_name));
     }
 }

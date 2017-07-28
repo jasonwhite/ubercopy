@@ -27,6 +27,8 @@ pub struct Args {
     pub dryrun: bool,
     pub force: bool,
     pub skip_sanity: bool,
+    pub sandbox_src: bool,
+    pub sandbox_dest: bool,
     pub threads: usize,
     pub retries: usize,
     pub dest: PathBuf,
@@ -61,6 +63,18 @@ impl Args {
                     .help("Skip doing a sanity check after copying all the files.")
                     .long("skip-sanity")
                     .short("S"),
+
+                Arg::with_name("sandbox-src")
+                    .help("Don't allow source paths to escape the current directory.")
+                    .long("sandbox-src"),
+
+                Arg::with_name("sandbox-dest")
+                    .help("Don't allow destination paths to escape the current directory.")
+                    .long("sandbox-dest"),
+
+                Arg::with_name("sandbox")
+                    .help("Implies both --sandbox-src and --sandbox-dest.")
+                    .long("sandbox"),
 
                 Arg::with_name("threads")
                     .help("Number of threads to use for copying.")
@@ -106,6 +120,8 @@ impl Args {
             dryrun: matches.is_present("dryrun"),
             force: matches.is_present("force"),
             skip_sanity: matches.is_present("skip-sanity"),
+            sandbox_src: matches.is_present("sandbox") || matches.is_present("sandbox-src"),
+            sandbox_dest: matches.is_present("sandbox") || matches.is_present("sandbox-dest"),
             threads: value_t!(matches, "threads", usize).unwrap_or_else(|e| e.exit()),
             retries: value_t!(matches, "retries", usize).unwrap_or_else(|e| e.exit()),
             dest: matches.value_of("dest").map_or(PathBuf::from(""), PathBuf::from),

@@ -18,82 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::path::{Path, PathBuf, Component, Prefix};
+use std::path::PathBuf;
 
 use std::fmt;
 use std::io;
 use std::time::Duration;
-use std::ffi::OsString;
 
 use util;
-
-/// Returns a normalized path.
-fn norm<P: AsRef<Path>>(path: P) -> PathBuf {
-    let path = path.as_ref();
-    let mut new_path = PathBuf::new();
-
-    let mut components = path.components();
-
-    if path.as_os_str().len() >= 260 {
-        // If the path is >= 260 characters, we should prefix it with '\\?\' if
-        // possible.
-        if let Some(c) = components.next() {
-            match c {
-                Component::CurDir => {},
-                Component::RootDir |
-                Component::ParentDir |
-                Component::Normal(_) => {
-                    // Can't add the prefix. It's a relative path.
-                    new_path.push(c.as_os_str());
-                },
-                Component::Prefix(prefix) => {
-                    match prefix.kind() {
-                        Prefix::UNC(server, share) => {
-                            let mut p = OsString::from(r"\\?\UNC\");
-                            p.push(server);
-                            p.push(r"\");
-                            p.push(share);
-                            new_path.push(p);
-                        },
-                        Prefix::Disk(_) => {
-                            let mut p = OsString::from(r"\\?\");
-                            p.push(c.as_os_str());
-                            new_path.push(p);
-                        },
-                        _ => { new_path.push(c.as_os_str()); },
-                    };
-                },
-            };
-        }
-    }
-
-    for c in components {
-        match c {
-            Component::CurDir => {},
-            Component::ParentDir => {
-                let pop = match new_path.components().next_back() {
-                    Some(Component::Prefix(_)) | Some(Component::RootDir) => true,
-                    Some(Component::Normal(s)) => !s.is_empty(),
-                    _ => false,
-                };
-
-                if pop {
-                    new_path.pop();
-                }
-                else {
-                    new_path.push("..");
-                }
-            },
-            _ => { new_path.push(c.as_os_str()); },
-        };
-    }
-
-    if new_path.as_os_str().is_empty() {
-        new_path.push(".");
-    }
-
-    new_path
-}
 
 /// A copy operation.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -111,12 +42,11 @@ impl fmt::Display for CopyOp {
 
 impl CopyOp {
 
-    pub fn new<P>(from: P, to: P) -> CopyOp
-        where P: AsRef<Path>
+    pub fn new(from: PathBuf, to: PathBuf) -> CopyOp
     {
         CopyOp {
-            src: norm(from),
-            dest: norm(to),
+            src: from,
+            dest: to,
         }
     }
 
@@ -164,52 +94,5 @@ impl CopyOp {
         else {
             Ok(true)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::iter;
-
-    #[test]
-    #[cfg(windows)]
-    fn test_norm() {
-        assert_eq!(Path::new("../foo").parent(), Some(Path::new("..")));
-        assert_eq!(norm("foo"), Path::new("foo"));
-        assert_eq!(norm("./foo"), Path::new("foo"));
-        assert_eq!(norm("."), Path::new("."));
-        assert_eq!(norm(".."), Path::new(".."));
-        assert_eq!(norm(r"..\.."), Path::new(r"..\.."));
-        assert_eq!(norm(r"..\..\.."), Path::new(r"..\..\.."));
-        assert_eq!(norm(""), Path::new("."));
-        assert_eq!(norm("foo/bar"), Path::new(r"foo\bar"));
-        assert_eq!(norm("C:/foo/../bar"), Path::new(r"C:\bar"));
-        assert_eq!(norm("C:/../bar"), Path::new(r"C:\bar"));
-        assert_eq!(norm("C:/../../bar"), Path::new(r"C:\bar"));
-        assert_eq!(norm("foo//bar///"), Path::new(r"foo\bar"));
-        assert_eq!(norm(r"\\server\share\..\foo"), Path::new(r"\\server\share\foo"));
-        assert_eq!(norm(r"\\server\share\..\foo\.."), Path::new(r"\\server\share"));
-        assert_eq!(norm(r"..\foo\..\..\bar"), Path::new(r"..\..\bar"));
-    }
-
-    #[test]
-    #[cfg(windows)]
-    fn test_norm_long_paths() {
-
-        let long_name : String = iter::repeat('a').take(260).collect();
-        let long_name = long_name.as_str();
-
-        // Long paths
-        assert_eq!(norm(String::from(r"C:\")+long_name),
-                   PathBuf::from(String::from(r"\\?\C:\")+long_name));
-        assert_eq!(norm(String::from(r"\\server\share\")+long_name),
-                   PathBuf::from(String::from(r"\\?\UNC\server\share\")+long_name));
-
-        // Long relative paths
-        assert_eq!(norm(String::from(r"..\relative\")+long_name),
-                   PathBuf::from(String::from(r"..\relative\")+long_name));
-        assert_eq!(norm(String::from(r".\relative\")+long_name),
-                   PathBuf::from(String::from(r"relative\")+long_name));
     }
 }

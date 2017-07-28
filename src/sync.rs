@@ -32,6 +32,7 @@ use std::sync::mpsc::sync_channel;
 
 use std::path::Path;
 use util;
+use util::PathExt;
 use errors;
 
 pub enum SyncError<'a> {
@@ -284,7 +285,7 @@ pub fn sync<'a>(prev: &'a Manifest,
 
         // Try deleting parent directories as well.
         let parent_dirs = to_delete.iter()
-            .filter_map(|p| util::removable_parent(p))
+            .filter_map(|p| p.removable_parent())
             .unique();
 
         for dir in parent_dirs {
@@ -314,7 +315,7 @@ pub fn sync<'a>(prev: &'a Manifest,
     {
         // 4. Create parent directories for modified files.
         let mut dirs : Vec<&Path> = outdated.iter()
-            .filter_map(|op| util::removable_parent(&op.dest))
+            .filter_map(|op| op.dest.removable_parent())
             .collect();
 
         dirs.sort();
