@@ -45,6 +45,8 @@ use libc::{stat as stat64, lstat as lstat64, utimensat, timespec, AT_FDCWD};
 use std::os::unix::ffi::OsStrExt;
 #[cfg(unix)]
 use std::mem;
+#[cfg(unix)]
+use libc::{ENOENT, ENOTEMPTY};
 
 /// Convert a string to UTF-16.
 #[cfg(windows)]
@@ -86,9 +88,16 @@ pub fn remove_dir(path: &Path) -> io::Result<()> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 pub fn remove_dir(path: &Path) -> io::Result<()> {
-    fs::remove_dir(path)
+    match fs::remove_dir(path) {
+        Err(err) => match err.raw_os_error().unwrap() {
+            ENOENT    => Ok(()),
+            ENOTEMPTY => Ok(()),
+            _ => Err(err),
+        },
+        Ok(()) => Ok(()),
+    }
 }
 
 /// Remove a directory with a retry.

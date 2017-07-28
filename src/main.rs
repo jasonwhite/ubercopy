@@ -98,16 +98,16 @@ fn main() {
 
     let args = Args::parse();
 
-    let path_prev = args.manifest.as_str();
-    let mut path_next = args.manifest.clone();
-    path_next.push_str(".next");
-    let path_next = path_next.as_str();
+    let path_prev = &args.manifest;
+    let mut path_next = args.manifest.as_os_str().to_os_string();
+    path_next.push(".next");
+    let path_next = Path::new(&path_next);
 
-    generate_manifest(args.command, &args.args, path_next);
+    generate_manifest(args.program, &args.args, &path_next);
 
     // Previous manifest
     let prev = match fs::File::open(path_prev) {
-        Ok(f) => Manifest::parse_reader(BufReader::new(f)),
+        Ok(f) => Manifest::parse_reader(BufReader::new(f), &args.dest),
         Err(_) => Ok(Manifest::new()),
     };
 
@@ -117,7 +117,7 @@ fn main() {
     }
 
     // Next manifest
-    let next = Manifest::parse(path_next);
+    let next = Manifest::parse(&path_next, &args.dest.as_path());
 
     if let Err(err) = next {
         println!("Error: Failed to parse manifest: {}", err);
@@ -140,7 +140,7 @@ fn main() {
     if !args.dryrun {
         // Replace previous manifest with next manifest if everything succeeds.
         // This is an atomic way of saying that everything succeeded.
-        if let Err(err) = fs::rename(path_next, path_prev) {
+        if let Err(err) = fs::rename(&path_next, path_prev) {
             println!("Failed to rename {:?} to {:?}: {}",
                      path_next, path_prev, err);
             exit(1);

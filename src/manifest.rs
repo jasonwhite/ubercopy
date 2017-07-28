@@ -22,7 +22,7 @@ use scoped_pool::Pool;
 
 use copyop::CopyOp;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::io;
 use std::fs::File;
 use std::time::Duration;
@@ -39,7 +39,10 @@ impl Manifest {
         Manifest {operations: vec![]}
     }
 
-    pub fn parse_reader<R: io::BufRead>(reader: R) -> Result<Self, String> {
+    pub fn parse_reader<R, P>(reader: R, dest_dir: P) -> Result<Self, String>
+        where R: io::BufRead, P: AsRef<Path>
+    {
+        let dest_dir = dest_dir.as_ref();
 
         let mut operations : Vec<CopyOp> = Vec::new();
 
@@ -60,11 +63,16 @@ impl Manifest {
             let dest = try!(s.next().ok_or(
                     format!("Missing destination file on line {}", i+1)));
 
+            let src_path = PathBuf::from(src);
+            let mut dest_path = PathBuf::new();
+            dest_path.push(dest_dir);
+            dest_path.push(dest);
+
             // TODO: Normalize file paths. Rust currently has no good way of
             // doing this. `canonicalize` can be used, but that resolves
             // symbolic links. That's fine for source files, but not destination
             // files.
-            operations.push(CopyOp::new(src, dest));
+            operations.push(CopyOp::new(&src_path, &dest_path));
         }
 
         // This vector needs to be sorted so that we can diff two manifests.
@@ -77,11 +85,11 @@ impl Manifest {
         Ok(Manifest {operations: operations})
     }
 
-    pub fn parse<P>(path: P) -> Result<Self, String>
+    pub fn parse<P>(path: P, dest: P) -> Result<Self, String>
         where P: AsRef<Path>
     {
         let f = try!(File::open(path).map_err(|e| e.to_string()));
-        Manifest::parse_reader(io::BufReader::new(f))
+        Manifest::parse_reader(io::BufReader::new(f), dest)
     }
 
     /// Returns a sorted list of all sources.

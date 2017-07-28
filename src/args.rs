@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::path::PathBuf;
+
 use clap::{App, AppSettings, Arg, ArgMatches};
 
 #[derive(Debug)]
@@ -27,8 +29,9 @@ pub struct Args {
     pub skip_sanity: bool,
     pub threads: usize,
     pub retries: usize,
-    pub manifest: String,
-    pub command: String,
+    pub dest: PathBuf,
+    pub manifest: PathBuf,
+    pub program: String,
     pub args: Vec<String>,
 }
 
@@ -74,18 +77,23 @@ impl Args {
                     .takes_value(true)
                     .default_value("5"),
 
+                Arg::with_name("dest")
+                    .help("Makes all destination paths relative to this path.")
+                    .long("dest")
+                    .takes_value(true),
+
                 Arg::with_name("manifest")
                     .help("Path to the manifest to generate.")
                     .index(1)
                     .required(true),
 
-                Arg::with_name("command")
-                    .help("Generator command name.")
+                Arg::with_name("program")
+                    .help("Generator program name.")
                     .index(2)
                     .required(true),
 
                 Arg::with_name("args")
-                    .help("Generator command arguments.")
+                    .help("Generator program arguments.")
                     .min_values(1),
             ])
             .get_matches();
@@ -100,8 +108,9 @@ impl Args {
             skip_sanity: matches.is_present("skip-sanity"),
             threads: value_t!(matches, "threads", usize).unwrap_or_else(|e| e.exit()),
             retries: value_t!(matches, "retries", usize).unwrap_or_else(|e| e.exit()),
-            manifest: matches.value_of("manifest").unwrap().to_string(),
-            command: matches.value_of("command").unwrap().to_string(),
+            dest: matches.value_of("dest").map_or(PathBuf::from(""), PathBuf::from),
+            manifest: PathBuf::from(matches.value_of("manifest").unwrap()),
+            program: matches.value_of("program").unwrap().to_string(),
             args: match matches.values_of("args") {
                 None => vec![],
                 Some(vals) => vals.map(|s| String::from(s)).collect(),

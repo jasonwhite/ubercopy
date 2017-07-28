@@ -28,14 +28,13 @@ use std::ffi::OsString;
 use util;
 
 /// Returns a normalized path.
-fn norm<T: AsRef<str>>(s: T) -> PathBuf {
-    let s = s.as_ref();
-    let path = Path::new(s);
+fn norm<P: AsRef<Path>>(path: P) -> PathBuf {
+    let path = path.as_ref();
     let mut new_path = PathBuf::new();
 
     let mut components = path.components();
 
-    if s.len() >= 260 {
+    if path.as_os_str().len() >= 260 {
         // If the path is >= 260 characters, we should prefix it with '\\?\' if
         // possible.
         if let Some(c) = components.next() {
@@ -112,7 +111,9 @@ impl fmt::Display for CopyOp {
 
 impl CopyOp {
 
-    pub fn new<'a>(from: &'a str, to: &'a str) -> CopyOp {
+    pub fn new<P>(from: P, to: P) -> CopyOp
+        where P: AsRef<Path>
+    {
         CopyOp {
             src: norm(from),
             dest: norm(to),
