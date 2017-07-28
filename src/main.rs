@@ -107,7 +107,8 @@ fn main() {
 
     // Previous manifest
     let prev = match fs::File::open(path_prev) {
-        Ok(f) => Manifest::parse_reader(BufReader::new(f), &args.dest),
+        Ok(f) => Manifest::parse_reader(BufReader::new(f), &args.dest,
+                                        args.sandbox_src, args.sandbox_dest),
         Err(_) => Ok(Manifest::new()),
     };
 
@@ -117,7 +118,8 @@ fn main() {
     }
 
     // Next manifest
-    let next = Manifest::parse(&path_next, &args.dest.as_path());
+    let next = Manifest::parse(&path_next, &args.dest.as_path(),
+                               args.sandbox_src, args.sandbox_dest);
 
     if let Err(err) = next {
         println!("Error: Failed to parse manifest: {}", err);

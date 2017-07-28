@@ -28,6 +28,8 @@ use std::fs::File;
 use std::time::Duration;
 use std::sync::mpsc::sync_channel;
 
+use util::PathExt;
+
 /// Represents a manifest. A manifest is simply a sequence of copy operations.
 pub struct Manifest {
     operations: Vec<CopyOp>
@@ -39,7 +41,9 @@ impl Manifest {
         Manifest {operations: vec![]}
     }
 
-    pub fn parse_reader<R, P>(reader: R, dest_dir: P) -> Result<Self, String>
+    pub fn parse_reader<R, P>(reader: R, dest_dir: P,
+                              sandbox_src: bool, sandbox_dest: bool
+                              ) -> Result<Self, String>
         where R: io::BufRead, P: AsRef<Path>
     {
         let dest_dir = dest_dir.as_ref();
@@ -63,16 +67,28 @@ impl Manifest {
             let dest = try!(s.next().ok_or(
                     format!("Missing destination file on line {}", i+1)));
 
-            let src_path = PathBuf::from(src);
-            let mut dest_path = PathBuf::new();
-            dest_path.push(dest_dir);
-            dest_path.push(dest);
+            let src_path = Path::new(src).norm();
 
-            // TODO: Normalize file paths. Rust currently has no good way of
-            // doing this. `canonicalize` can be used, but that resolves
-            // symbolic links. That's fine for source files, but not destination
-            // files.
-            operations.push(CopyOp::new(&src_path, &dest_path));
+            if sandbox_src && !src_path.is_sandboxed() {
+                return Err(format!("source path {:?} is not sandboxed", src_path));
+            }
+
+            let dest_path = Path::new(dest).norm();
+
+            if sandbox_dest && !dest_path.is_sandboxed() {
+                return Err(format!("destination path {:?} is not sandboxed", dest_path));
+            }
+
+            let dest_path = if dest_dir.is_empty() {
+                dest_path
+            } else {
+                let mut path = PathBuf::new();
+                path.push(dest_dir);
+                path.push(dest_path);
+                path.norm()
+            };
+
+            operations.push(CopyOp::new(src_path, dest_path));
         }
 
         // This vector needs to be sorted so that we can diff two manifests.
@@ -85,11 +101,14 @@ impl Manifest {
         Ok(Manifest {operations: operations})
     }
 
-    pub fn parse<P>(path: P, dest: P) -> Result<Self, String>
+    pub fn parse<P>(path: P, dest: P,
+                    sandbox_src: bool, sandbox_dest: bool
+                    ) -> Result<Self, String>
         where P: AsRef<Path>
     {
         let f = try!(File::open(path).map_err(|e| e.to_string()));
-        Manifest::parse_reader(io::BufReader::new(f), dest)
+        Manifest::parse_reader(io::BufReader::new(f), dest,
+                               sandbox_src, sandbox_dest)
     }
 
     /// Returns a sorted list of all sources.
