@@ -548,15 +548,15 @@ mod tests {
         let long_name = long_name.as_str();
 
         // Long paths
-        assert_eq!(Path::new(String::from(r"C:\")+long_name).norm(),
+        assert_eq!(PathBuf::from(String::from(r"C:\")+long_name).norm(),
                    PathBuf::from(String::from(r"\\?\C:\")+long_name));
-        assert_eq!(Path::new(String::from(r"\\server\share\")+long_name).norm(),
+        assert_eq!(PathBuf::from(String::from(r"\\server\share\")+long_name).norm(),
                    PathBuf::from(String::from(r"\\?\UNC\server\share\")+long_name));
 
         // Long relative paths
-        assert_eq!(Path::new(String::from(r"..\relative\")+long_name).norm(),
+        assert_eq!(PathBuf::from(String::from(r"..\relative\")+long_name).norm(),
                    PathBuf::from(String::from(r"..\relative\")+long_name));
-        assert_eq!(Path::new(String::from(r".\relative\")+long_name).norm(),
+        assert_eq!(PathBuf::from(String::from(r".\relative\")+long_name).norm(),
                    PathBuf::from(String::from(r"relative\")+long_name));
     }
 }
