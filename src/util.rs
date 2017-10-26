@@ -62,8 +62,9 @@ fn to_u16s<S: AsRef<ffi::OsStr>>(s: S) -> Vec<u16> {
 pub fn remove_dir(path: &Path) -> io::Result<()> {
     match fs::remove_dir(path) {
         Err(err) => match err.raw_os_error().unwrap() as u32 {
-            winerror::ERROR_FILE_NOT_FOUND => Ok(()),
-            winerror::ERROR_DIR_NOT_EMPTY  => Ok(()),
+            winerror::ERROR_FILE_NOT_FOUND    => Ok(()),
+            winerror::ERROR_DIR_NOT_EMPTY     => Ok(()),
+            winerror::ERROR_SHARING_VIOLATION => Ok(()),
             _   => Err(err),
         },
         Ok(()) => Ok(()),
