@@ -28,6 +28,11 @@ matrix:
       os: osx
       rust: nightly
 
+  # Allow OSX builds to fail. They are unsupported for now, but would be
+  # relatively easy to fix.
+  allow_failures:
+  - os: osx
+
 before_install: set -e
 
 install:
