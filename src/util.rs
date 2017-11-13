@@ -80,7 +80,7 @@ pub fn remove_dir(path: &Path) -> io::Result<bool> {
             ENOTEMPTY => Ok(false),
             _ => Err(err),
         },
-        Ok(x) => Ok(x),
+        Ok(()) => Ok(true),
     }
 }
 
