@@ -57,34 +57,35 @@ fn to_u16s<S: AsRef<ffi::OsStr>>(s: S) -> Vec<u16> {
     s
 }
 
-/// Wrapper for `remove_dir` to ignore certain types of errors.
+/// Wrapper for `remove_dir` to ignore certain types of errors. The value of the
+/// result indicates whether or not we can keep climbing the tree to delete more
+/// parent directories.
 #[cfg(windows)]
-pub fn remove_dir(path: &Path) -> io::Result<()> {
+pub fn remove_dir(path: &Path) -> io::Result<bool> {
     match fs::remove_dir(path) {
         Err(err) => match err.raw_os_error().unwrap() as u32 {
-            winerror::ERROR_FILE_NOT_FOUND    => Ok(()),
-            winerror::ERROR_DIR_NOT_EMPTY     => Ok(()),
-            winerror::ERROR_SHARING_VIOLATION => Ok(()),
+            winerror::ERROR_FILE_NOT_FOUND    => Ok(true),
+            winerror::ERROR_DIR_NOT_EMPTY     => Ok(false),
             _   => Err(err),
         },
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(true),
     }
 }
 
 #[cfg(unix)]
-pub fn remove_dir(path: &Path) -> io::Result<()> {
+pub fn remove_dir(path: &Path) -> io::Result<bool> {
     match fs::remove_dir(path) {
         Err(err) => match err.raw_os_error().unwrap() {
-            ENOENT    => Ok(()),
-            ENOTEMPTY => Ok(()),
+            ENOENT    => Ok(true),
+            ENOTEMPTY => Ok(false),
             _ => Err(err),
         },
-        Ok(()) => Ok(()),
+        Ok(x) => Ok(x),
     }
 }
 
 /// Remove a directory with a retry.
-pub fn remove_dir_retry(path: &Path, retries: usize, delay: Duration) -> io::Result<()> {
+pub fn remove_dir_retry(path: &Path, retries: usize, delay: Duration) -> io::Result<bool> {
     match remove_dir(path) {
         Err(err) => {
             if retries > 0 {
@@ -95,14 +96,16 @@ pub fn remove_dir_retry(path: &Path, retries: usize, delay: Duration) -> io::Res
                 Err(err)
             }
         },
-        Ok(()) => Ok(()),
+        Ok(x) => Ok(x),
     }
 }
 
 /// Deletes a directory and all its parent directories until it reaches a
 /// directory that is not empty.
 pub fn remove_empty_dirs(path: &Path, retries: usize, delay: Duration) -> io::Result<()> {
-    try!(remove_dir_retry(path, retries, delay));
+    if !remove_dir_retry(path, retries, delay)? {
+        return Ok(());
+    }
 
     if let Some(p) = path.removable_parent() {
         // Try to remove the parent directory as well.
