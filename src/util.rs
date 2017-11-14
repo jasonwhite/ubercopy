@@ -38,8 +38,7 @@ use std::os::windows::ffi::OsStrExt;
 
 #[cfg(any(target_os = "linux", target_os = "emscripten"))]
 use libc::{stat64, lstat64, utimensat, timespec, AT_FDCWD};
-#[cfg(all(unix, not(any(target_os = "linux",
-                        target_os = "emscripten"))))]
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "emscripten"))))]
 use libc::{stat as stat64, lstat as lstat64, utimensat, timespec, AT_FDCWD};
 
 #[cfg(unix)]
@@ -52,7 +51,7 @@ use libc::{ENOENT, ENOTEMPTY};
 /// Convert a string to UTF-16.
 #[cfg(windows)]
 fn to_u16s<S: AsRef<ffi::OsStr>>(s: S) -> Vec<u16> {
-    let mut s : Vec<u16> = s.as_ref().encode_wide().collect();
+    let mut s: Vec<u16> = s.as_ref().encode_wide().collect();
     s.push(0);
     s
 }
@@ -63,11 +62,13 @@ fn to_u16s<S: AsRef<ffi::OsStr>>(s: S) -> Vec<u16> {
 #[cfg(windows)]
 pub fn remove_dir(path: &Path) -> io::Result<bool> {
     match fs::remove_dir(path) {
-        Err(err) => match err.raw_os_error().unwrap() as u32 {
-            winerror::ERROR_FILE_NOT_FOUND    => Ok(true),
-            winerror::ERROR_DIR_NOT_EMPTY     => Ok(false),
-            _   => Err(err),
-        },
+        Err(err) => {
+            match err.raw_os_error().unwrap() as u32 {
+                winerror::ERROR_FILE_NOT_FOUND => Ok(true),
+                winerror::ERROR_DIR_NOT_EMPTY => Ok(false),
+                _ => Err(err),
+            }
+        }
         Ok(()) => Ok(true),
     }
 }
@@ -75,34 +76,43 @@ pub fn remove_dir(path: &Path) -> io::Result<bool> {
 #[cfg(unix)]
 pub fn remove_dir(path: &Path) -> io::Result<bool> {
     match fs::remove_dir(path) {
-        Err(err) => match err.raw_os_error().unwrap() {
-            ENOENT    => Ok(true),
-            ENOTEMPTY => Ok(false),
-            _ => Err(err),
-        },
+        Err(err) => {
+            match err.raw_os_error().unwrap() {
+                ENOENT => Ok(true),
+                ENOTEMPTY => Ok(false),
+                _ => Err(err),
+            }
+        }
         Ok(()) => Ok(true),
     }
 }
 
 /// Remove a directory with a retry.
-pub fn remove_dir_retry(path: &Path, retries: usize, delay: Duration) -> io::Result<bool> {
+pub fn remove_dir_retry(
+    path: &Path,
+    retries: usize,
+    delay: Duration,
+) -> io::Result<bool> {
     match remove_dir(path) {
         Err(err) => {
             if retries > 0 {
                 thread::sleep(delay);
-                remove_dir_retry(path, retries-1, delay*2)
-            }
-            else {
+                remove_dir_retry(path, retries - 1, delay * 2)
+            } else {
                 Err(err)
             }
-        },
+        }
         Ok(x) => Ok(x),
     }
 }
 
 /// Deletes a directory and all its parent directories until it reaches a
 /// directory that is not empty.
-pub fn remove_empty_dirs(path: &Path, retries: usize, delay: Duration) -> io::Result<()> {
+pub fn remove_empty_dirs(
+    path: &Path,
+    retries: usize,
+    delay: Duration,
+) -> io::Result<()> {
     if !remove_dir_retry(path, retries, delay)? {
         return Ok(());
     }
@@ -110,8 +120,7 @@ pub fn remove_empty_dirs(path: &Path, retries: usize, delay: Duration) -> io::Re
     if let Some(p) = path.removable_parent() {
         // Try to remove the parent directory as well.
         remove_empty_dirs(p, retries, delay)
-    }
-    else {
+    } else {
         Ok(())
     }
 }
@@ -127,10 +136,12 @@ fn unset_attributes(path: &Path) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
 
-    let new_attribs = attribs & !(FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN);
+    let new_attribs = attribs &
+        !(FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN);
 
     if attribs != new_attribs {
-        let ret = unsafe { kernel32::SetFileAttributesW(path.as_ptr(), new_attribs) };
+        let ret =
+            unsafe { kernel32::SetFileAttributesW(path.as_ptr(), new_attribs) };
         if ret == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -144,29 +155,32 @@ fn unset_attributes(path: &Path) -> io::Result<()> {
 #[cfg(windows)]
 fn remove_file(path: &Path) -> io::Result<()> {
     match fs::remove_file(path) {
-        Err(err) => match err.kind() {
-            // It's fine if the file already doesn't exist.
-            io::ErrorKind::NotFound => Ok(()),
-            io::ErrorKind::PermissionDenied => {
-                // Unset read-only and hidden attributes and try the copy again.
-                // Windows will fail to remove these types of files.
-                if let Err(err) = unset_attributes(path) {
-                    Err(err)
+        Err(err) => {
+            match err.kind() {
+                // It's fine if the file already doesn't exist.
+                io::ErrorKind::NotFound => Ok(()),
+                io::ErrorKind::PermissionDenied => {
+                    // Unset read-only and hidden attributes and try the copy
+                    // again. Windows will fail to remove these types of files.
+                    if let Err(err) = unset_attributes(path) {
+                        Err(err)
+                    } else {
+                        // Try again, but only once. Don't want to get into an
+                        // infinite loop.
+                        fs::remove_file(path)
+                    }
                 }
-                else {
-                    // Try again, but only once. Don't want to get into an
-                    // infinite loop.
-                    fs::remove_file(path)
-                }
-            },
 
-            // Anything else is still an error.
-            _ => Err(err),
-        },
+                // Anything else is still an error.
+                _ => Err(err),
+            }
+        }
         Ok(()) => {
             if path.is_file() {
                 // The operating system lied to us. The file still exists.
-                Err(io::Error::from_raw_os_error(winerror::ERROR_FILE_EXISTS as i32))
+                Err(io::Error::from_raw_os_error(
+                        winerror::ERROR_FILE_EXISTS as i32
+                ))
             } else {
                 Ok(())
             }
@@ -177,30 +191,35 @@ fn remove_file(path: &Path) -> io::Result<()> {
 #[cfg(not(windows))]
 pub fn remove_file(path: &Path) -> io::Result<()> {
     match fs::remove_file(path) {
-        Err(err) => match err.kind() {
-            // It's fine if the file already doesn't exist.
-            io::ErrorKind::NotFound => Ok(()),
+        Err(err) => {
+            match err.kind() {
+                // It's fine if the file already doesn't exist.
+                io::ErrorKind::NotFound => Ok(()),
 
-            // Anything else is still an error.
-            _ => Err(err),
-        },
-        Ok(()) => Ok(())
+                // Anything else is still an error.
+                _ => Err(err),
+            }
+        }
+        Ok(()) => Ok(()),
     }
 }
 
 /// Removes a file with a retry. This can be useful on Windows if someone has a
 /// lock on the file.
-pub fn remove_file_retry(path: &Path, retries: usize, delay: Duration) -> io::Result<()> {
+pub fn remove_file_retry(
+    path: &Path,
+    retries: usize,
+    delay: Duration,
+) -> io::Result<()> {
     match remove_file(path) {
         Err(err) => {
             if retries > 0 {
                 thread::sleep(delay);
-                remove_file_retry(path, retries-1, delay*2)
-            }
-            else {
+                remove_file_retry(path, retries - 1, delay * 2)
+            } else {
                 Err(err)
             }
-        },
+        }
         Ok(()) => Ok(()),
     }
 }
@@ -218,16 +237,14 @@ pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
                 // attributes set.
                 if let Err(err) = unset_attributes(to) {
                     Err(err)
-                }
-                else {
+                } else {
                     // Try again.
                     fs::copy(from, to)
                 }
-            }
-            else {
+            } else {
                 Err(err)
             }
-        },
+        }
         Ok(n) => Ok(n),
     }
 }
@@ -242,8 +259,7 @@ fn lstat(p: &Path) -> io::Result<stat64> {
 
     if ret == -1 {
         Err(io::Error::last_os_error())
-    }
-    else {
+    } else {
         Ok(stat)
     }
 }
@@ -272,8 +288,7 @@ fn copy_timestamps(from: &Path, to: &Path) -> io::Result<()> {
 
     if ret == -1 {
         Err(io::Error::last_os_error())
-    }
-    else {
+    } else {
         Ok(())
     }
 }
@@ -289,51 +304,60 @@ pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
 
 /// Copies a file with a retry. When copying files across the network, this can
 /// be useful to work around transient failures.
-pub fn copy_retry(from: &Path, to: &Path,
-                  retries: usize, delay: Duration
-                 ) -> io::Result<u64> {
+pub fn copy_retry(
+    from: &Path,
+    to: &Path,
+    retries: usize,
+    delay: Duration,
+) -> io::Result<u64> {
     match copy(from, to) {
-        Err(err) => match err.kind() {
-            // These errors are not worth retrying as they almost never
-            // succeed with a retry.
-            io::ErrorKind::NotFound |
-            io::ErrorKind::PermissionDenied => Err(err),
+        Err(err) => {
+            match err.kind() {
+                // These errors are not worth retrying as they almost never
+                // succeed with a retry.
+                io::ErrorKind::NotFound |
+                io::ErrorKind::PermissionDenied => Err(err),
 
-            // Anything else should have a retry.
-            _ => {
-                if retries > 0 {
-                    thread::sleep(delay);
-                    copy_retry(from, to, retries-1, delay*2)
-                }
-                else {
-                    Err(err)
+                // Anything else should have a retry.
+                _ => {
+                    if retries > 0 {
+                        thread::sleep(delay);
+                        copy_retry(from, to, retries - 1, delay * 2)
+                    } else {
+                        Err(err)
+                    }
                 }
             }
-        },
+        }
         Ok(n) => Ok(n),
     }
 }
 
 /// Get metadata with a retry.
-pub fn metadata_retry(path: &Path, retries: usize, delay: Duration) -> io::Result<fs::Metadata> {
+pub fn metadata_retry(
+    path: &Path,
+    retries: usize,
+    delay: Duration,
+) -> io::Result<fs::Metadata> {
     match fs::metadata(path) {
-        Err(err) => match err.kind() {
-            // These errors are not worth retrying as they almost never
-            // succeed with a retry.
-            io::ErrorKind::NotFound |
-            io::ErrorKind::PermissionDenied => Err(err),
+        Err(err) => {
+            match err.kind() {
+                // These errors are not worth retrying as they almost never
+                // succeed with a retry.
+                io::ErrorKind::NotFound |
+                io::ErrorKind::PermissionDenied => Err(err),
 
-            // Anything else should have a retry
-            _ => {
-                if retries > 0 {
-                    thread::sleep(delay);
-                    metadata_retry(path, retries-1, delay*2)
-                }
-                else {
-                    Err(err)
+                // Anything else should have a retry
+                _ => {
+                    if retries > 0 {
+                        thread::sleep(delay);
+                        metadata_retry(path, retries - 1, delay * 2)
+                    } else {
+                        Err(err)
+                    }
                 }
             }
-        },
+        }
         Ok(m) => Ok(m),
     }
 }
@@ -357,20 +381,17 @@ pub trait PathExt {
 }
 
 impl PathExt for Path {
-
     fn removable_parent(&self) -> Option<&Path> {
         let mut comps = self.components();
-        comps.next_back().and_then(|p| {
-            match p {
-                Component::Normal(_) => {
-                    let parent = comps.as_path();
-                    match comps.next_back() {
-                        Some(Component::Normal(_)) => Some(parent),
-                        _ => None,
-                    }
-                },
-                _ => None,
+        comps.next_back().and_then(|p| match p {
+            Component::Normal(_) => {
+                let parent = comps.as_path();
+                match comps.next_back() {
+                    Some(Component::Normal(_)) => Some(parent),
+                    _ => None,
+                }
             }
+            _ => None,
         })
     }
 
@@ -380,17 +401,17 @@ impl PathExt for Path {
         let mut components = self.components();
 
         if self.as_os_str().len() >= 260 {
-            // If the path is >= 260 characters, we should prefix it with '\\?\' if
-            // possible.
+            // If the path is >= 260 characters, we should prefix it with '\\?\'
+            // if possible.
             if let Some(c) = components.next() {
                 match c {
-                    Component::CurDir => {},
+                    Component::CurDir => {}
                     Component::RootDir |
                     Component::ParentDir |
                     Component::Normal(_) => {
                         // Can't add the prefix. It's a relative path.
                         new_path.push(c.as_os_str());
-                    },
+                    }
                     Component::Prefix(prefix) => {
                         match prefix.kind() {
                             Prefix::UNC(server, share) => {
@@ -399,37 +420,41 @@ impl PathExt for Path {
                                 p.push(r"\");
                                 p.push(share);
                                 new_path.push(p);
-                            },
+                            }
                             Prefix::Disk(_) => {
                                 let mut p = ffi::OsString::from(r"\\?\");
                                 p.push(c.as_os_str());
                                 new_path.push(p);
-                            },
-                            _ => { new_path.push(c.as_os_str()); },
+                            }
+                            _ => {
+                                new_path.push(c.as_os_str());
+                            }
                         };
-                    },
+                    }
                 };
             }
         }
 
         for c in components {
             match c {
-                Component::CurDir => {},
+                Component::CurDir => {}
                 Component::ParentDir => {
                     let pop = match new_path.components().next_back() {
-                        Some(Component::Prefix(_)) | Some(Component::RootDir) => true,
+                        Some(Component::Prefix(_)) |
+                        Some(Component::RootDir) => true,
                         Some(Component::Normal(s)) => !s.is_empty(),
                         _ => false,
                     };
 
                     if pop {
                         new_path.pop();
-                    }
-                    else {
+                    } else {
                         new_path.push("..");
                     }
-                },
-                _ => { new_path.push(c.as_os_str()); },
+                }
+                _ => {
+                    new_path.push(c.as_os_str());
+                }
             };
         }
 
@@ -447,8 +472,7 @@ impl PathExt for Path {
                 Component::Normal(_) => true,
                 _ => false,
             }
-        }
-        else {
+        } else {
             // Nothing in the path. It can be considered sandboxed.
             true
         }
@@ -479,28 +503,42 @@ mod tests {
         assert_eq!(Path::new("foo").removable_parent(), None);
         assert_eq!(Path::new("/foo").removable_parent(), None);
         assert_eq!(Path::new("/").removable_parent(), None);
-        assert_eq!(Path::new("foo/bar").removable_parent(), Some(Path::new("foo")));
+        assert_eq!(
+            Path::new("foo/bar").removable_parent(),
+            Some(Path::new("foo"))
+        );
     }
 
     #[test]
     #[cfg(windows)]
     fn test_parent_dir_win() {
-        assert_eq!(Path::new(r"C:\foo\bar").removable_parent(),
-                   Some(Path::new(r"C:\foo")));
+        assert_eq!(
+            Path::new(r"C:\foo\bar").removable_parent(),
+            Some(Path::new(r"C:\foo"))
+        );
         assert_eq!(Path::new(r"C:\foo").removable_parent(), None);
         assert_eq!(Path::new(r"C:\").removable_parent(), None);
         assert_eq!(Path::new(r"\\?\C:\foo").removable_parent(), None);
         assert_eq!(Path::new(r"\\?\C:\").removable_parent(), None);
-        assert_eq!(Path::new(r"\\?\C:\foo\bar").removable_parent(),
-                   Some(Path::new(r"\\?\C:\foo")));
+        assert_eq!(
+            Path::new(r"\\?\C:\foo\bar").removable_parent(),
+            Some(Path::new(r"\\?\C:\foo"))
+        );
         assert_eq!(Path::new(r"\\server\share").removable_parent(), None);
         assert_eq!(Path::new(r"\\server\share\foo").removable_parent(), None);
-        assert_eq!(Path::new(r"\\server\share\foo\bar").removable_parent(),
-                   Some(Path::new(r"\\server\share\foo")));
+        assert_eq!(
+            Path::new(r"\\server\share\foo\bar").removable_parent(),
+            Some(Path::new(r"\\server\share\foo"))
+        );
         assert_eq!(Path::new(r"\\?\UNC\server\share").removable_parent(), None);
-        assert_eq!(Path::new(r"\\?\UNC\server\share\foo").removable_parent(), None);
-        assert_eq!(Path::new(r"\\?\UNC\server\share\foo\bar").removable_parent(),
-                   Some(Path::new(r"\\?\UNC\server\share\foo")));
+        assert_eq!(
+            Path::new(r"\\?\UNC\server\share\foo").removable_parent(),
+            None
+        );
+        assert_eq!(
+            Path::new(r"\\?\UNC\server\share\foo\bar").removable_parent(),
+            Some(Path::new(r"\\?\UNC\server\share\foo"))
+        );
     }
 
     #[test]
@@ -519,9 +557,18 @@ mod tests {
         assert_eq!(Path::new("C:/../bar").norm(), Path::new(r"C:\bar"));
         assert_eq!(Path::new("C:/../../bar").norm(), Path::new(r"C:\bar"));
         assert_eq!(Path::new("foo//bar///").norm(), Path::new(r"foo\bar"));
-        assert_eq!(Path::new(r"\\server\share\..\foo").norm(), Path::new(r"\\server\share\foo"));
-        assert_eq!(Path::new(r"\\server\share\..\foo\..").norm(), Path::new(r"\\server\share"));
-        assert_eq!(Path::new(r"..\foo\..\..\bar").norm(), Path::new(r"..\..\bar"));
+        assert_eq!(
+            Path::new(r"\\server\share\..\foo").norm(),
+            Path::new(r"\\server\share\foo")
+        );
+        assert_eq!(
+            Path::new(r"\\server\share\..\foo\..").norm(),
+            Path::new(r"\\server\share")
+        );
+        assert_eq!(
+            Path::new(r"..\foo\..\..\bar").norm(),
+            Path::new(r"..\..\bar")
+        );
     }
 
     #[test]
@@ -540,7 +587,10 @@ mod tests {
         assert_eq!(Path::new("/../bar").norm(), Path::new("/bar"));
         assert_eq!(Path::new("/../../bar").norm(), Path::new("/bar"));
         assert_eq!(Path::new("foo//bar///").norm(), Path::new("foo/bar"));
-        assert_eq!(Path::new("../foo/../../bar").norm(), Path::new("../../bar"));
+        assert_eq!(
+            Path::new("../foo/../../bar").norm(),
+            Path::new("../../bar")
+        );
     }
 
     #[test]
@@ -548,19 +598,27 @@ mod tests {
     fn test_norm_long_paths() {
         use std::iter;
 
-        let long_name : String = iter::repeat('a').take(260).collect();
+        let long_name: String = iter::repeat('a').take(260).collect();
         let long_name = long_name.as_str();
 
         // Long paths
-        assert_eq!(PathBuf::from(String::from(r"C:\")+long_name).norm(),
-                   PathBuf::from(String::from(r"\\?\C:\")+long_name));
-        assert_eq!(PathBuf::from(String::from(r"\\server\share\")+long_name).norm(),
-                   PathBuf::from(String::from(r"\\?\UNC\server\share\")+long_name));
+        assert_eq!(
+            PathBuf::from(String::from(r"C:\") + long_name).norm(),
+            PathBuf::from(String::from(r"\\?\C:\") + long_name)
+        );
+        assert_eq!(
+            PathBuf::from(String::from(r"\\server\share\") + long_name).norm(),
+            PathBuf::from(String::from(r"\\?\UNC\server\share\") + long_name)
+        );
 
         // Long relative paths
-        assert_eq!(PathBuf::from(String::from(r"..\relative\")+long_name).norm(),
-                   PathBuf::from(String::from(r"..\relative\")+long_name));
-        assert_eq!(PathBuf::from(String::from(r".\relative\")+long_name).norm(),
-                   PathBuf::from(String::from(r"relative\")+long_name));
+        assert_eq!(
+            PathBuf::from(String::from(r"..\relative\") + long_name).norm(),
+            PathBuf::from(String::from(r"..\relative\") + long_name)
+        );
+        assert_eq!(
+            PathBuf::from(String::from(r".\relative\") + long_name).norm(),
+            PathBuf::from(String::from(r"relative\") + long_name)
+        );
     }
 }

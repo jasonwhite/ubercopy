@@ -38,7 +38,7 @@ pub struct Args {
 }
 
 impl Args {
-
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     pub fn parse() -> Self {
         let matches = App::new("ubercopy")
             .version(crate_version!())
@@ -60,16 +60,19 @@ impl Args {
                     .short("f"),
 
                 Arg::with_name("skip-sanity")
-                    .help("Skip doing a sanity check after copying all the files.")
+                    .help("Skip doing a sanity check after copying all the \
+                          files.")
                     .long("skip-sanity")
                     .short("S"),
 
                 Arg::with_name("sandbox-src")
-                    .help("Don't allow source paths to escape the current directory.")
+                    .help("Don't allow source paths to escape the current \
+                          directory.")
                     .long("sandbox-src"),
 
                 Arg::with_name("sandbox-dest")
-                    .help("Don't allow destination paths to escape the current directory.")
+                    .help("Don't allow destination paths to escape the current \
+                          directory.")
                     .long("sandbox-dest"),
 
                 Arg::with_name("sandbox")
@@ -120,11 +123,20 @@ impl Args {
             dryrun: matches.is_present("dryrun"),
             force: matches.is_present("force"),
             skip_sanity: matches.is_present("skip-sanity"),
-            sandbox_src: matches.is_present("sandbox") || matches.is_present("sandbox-src"),
-            sandbox_dest: matches.is_present("sandbox") || matches.is_present("sandbox-dest"),
-            threads: value_t!(matches, "threads", usize).unwrap_or_else(|e| e.exit()),
-            retries: value_t!(matches, "retries", usize).unwrap_or_else(|e| e.exit()),
-            dest: matches.value_of("dest").map_or(PathBuf::from(""), PathBuf::from),
+            sandbox_src: matches.is_present("sandbox") ||
+                matches.is_present("sandbox-src"),
+            sandbox_dest: matches.is_present("sandbox") ||
+                matches.is_present("sandbox-dest"),
+            threads: value_t!(matches, "threads", usize).unwrap_or_else(
+                |e| e.exit(),
+            ),
+            retries: value_t!(matches, "retries", usize).unwrap_or_else(
+                |e| e.exit(),
+            ),
+            dest: matches.value_of("dest").map_or(
+                PathBuf::from(""),
+                PathBuf::from,
+            ),
             manifest: PathBuf::from(matches.value_of("manifest").unwrap()),
             program: matches.value_of("program").unwrap().to_string(),
             args: match matches.values_of("args") {
@@ -134,4 +146,3 @@ impl Args {
         }
     }
 }
-

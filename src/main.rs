@@ -17,8 +17,10 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-#[macro_use] extern crate clap;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate clap;
+#[macro_use]
+extern crate log;
 extern crate log4rs;
 extern crate duct;
 extern crate winapi;
@@ -36,9 +38,9 @@ mod util;
 
 use args::Args;
 use manifest::Manifest;
-use sync::{sync};
+use sync::sync;
 
-use std::process::{exit};
+use std::process::exit;
 use std::fs;
 use std::path::Path;
 use std::io::BufReader;
@@ -52,8 +54,9 @@ use log4rs::encode::pattern::PatternEncoder;
 use log4rs::config::{Appender, Config, Root};
 
 fn generate_manifest<T, P>(program: T, args: &[String], path: P)
-    where T: AsRef<str>,
-          P: AsRef<Path>
+where
+    T: AsRef<str>,
+    P: AsRef<Path>,
 {
     info!("Creating manifest {:?}", path.as_ref());
 
@@ -64,7 +67,11 @@ fn generate_manifest<T, P>(program: T, args: &[String], path: P)
         exit(1);
     }
 
-    info!("Running process `{}` with arguments {:?} to generate manifest", program.as_ref(), args);
+    info!(
+        "Running process `{}` with arguments {:?} to generate manifest",
+        program.as_ref(),
+        args
+    );
 
     // Run the command to produce the manifest.
     let output = duct::cmd(program.as_ref(), args)
@@ -80,14 +87,20 @@ fn generate_manifest<T, P>(program: T, args: &[String], path: P)
 fn main() {
 
     let log_level = match env::var("UBERCOPY_LOG") {
-        Ok(val) => LogLevelFilter::from_str(val.as_str())
-                    .unwrap_or(LogLevelFilter::Info),
+        Ok(val) => {
+            LogLevelFilter::from_str(val.as_str()).unwrap_or(
+                LogLevelFilter::Info,
+            )
+        }
         Err(_) => LogLevelFilter::Info,
     };
 
-    let stdout = ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d(%Y-%m-%d %H:%M:%S)} {l} {t} - {m}{n}")))
-        .build();
+    let stdout =
+        ConsoleAppender::builder()
+            .encoder(Box::new(
+                PatternEncoder::new("{d(%Y-%m-%d %H:%M:%S)} {l} {t} - {m}{n}"),
+            ))
+            .build();
 
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
@@ -107,8 +120,14 @@ fn main() {
 
     // Previous manifest
     let prev = match fs::File::open(path_prev) {
-        Ok(f) => Manifest::parse_reader(BufReader::new(f), &args.dest,
-                                        args.sandbox_src, args.sandbox_dest),
+        Ok(f) => {
+            Manifest::parse_reader(
+                BufReader::new(f),
+                &args.dest,
+                args.sandbox_src,
+                args.sandbox_dest,
+            )
+        }
         Err(_) => Ok(Manifest::new()),
     };
 
@@ -118,8 +137,12 @@ fn main() {
     }
 
     // Next manifest
-    let next = Manifest::parse(&path_next, &args.dest.as_path(),
-                               args.sandbox_src, args.sandbox_dest);
+    let next = Manifest::parse(
+        &path_next,
+        &args.dest.as_path(),
+        args.sandbox_src,
+        args.sandbox_dest,
+    );
 
     if let Err(err) = next {
         println!("Error: Failed to parse manifest: {}", err);
@@ -127,12 +150,19 @@ fn main() {
     }
 
     // Do the synchronization and handle errors.
-    match sync(&prev.unwrap(), &next.unwrap(),
-               args.dryrun, args.force, !args.skip_sanity, args.threads,
-               args.retries, Duration::from_secs(1)) {
+    match sync(
+        &prev.unwrap(),
+        &next.unwrap(),
+        args.dryrun,
+        args.force,
+        !args.skip_sanity,
+        args.threads,
+        args.retries,
+        Duration::from_secs(1),
+    ) {
         Ok(copied) => {
             println!("Successfully copied {} file(s).", copied);
-        },
+        }
         Err(err) => {
             println!("{}", err);
             exit(1);
@@ -143,8 +173,12 @@ fn main() {
         // Replace previous manifest with next manifest if everything succeeds.
         // This is an atomic way of saying that everything succeeded.
         if let Err(err) = fs::rename(&path_next, path_prev) {
-            println!("Failed to rename {:?} to {:?}: {}",
-                     path_next, path_prev, err);
+            println!(
+                "Failed to rename {:?} to {:?}: {}",
+                path_next,
+                path_prev,
+                err
+            );
             exit(1);
         }
     }

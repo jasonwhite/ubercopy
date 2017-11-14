@@ -35,15 +35,17 @@ pub struct CopyOp {
 
 impl fmt::Display for CopyOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "\"{}\" -> \"{}\"",
-               self.src.to_str().unwrap(), self.dest.to_str().unwrap())
+        write!(
+            f,
+            "\"{}\" -> \"{}\"",
+            self.src.to_str().unwrap(),
+            self.dest.to_str().unwrap()
+        )
     }
 }
 
 impl CopyOp {
-
-    pub fn new(from: PathBuf, to: PathBuf) -> CopyOp
-    {
+    pub fn new(from: PathBuf, to: PathBuf) -> CopyOp {
         CopyOp {
             src: from,
             dest: to,
@@ -52,7 +54,11 @@ impl CopyOp {
 
     /// Copies the source file to the given destination. It is expected that the
     /// destination directory already exists.
-    pub fn copy(&self, retries: usize, retry_delay: Duration) -> io::Result<u64> {
+    pub fn copy(
+        &self,
+        retries: usize,
+        retry_delay: Duration,
+    ) -> io::Result<u64> {
         util::copy_retry(&self.src, &self.dest, retries, retry_delay)
     }
 
@@ -61,8 +67,12 @@ impl CopyOp {
     /// operation *cannot* complete if attempted. That is, if the source does
     /// not exist or we do not have permissions for it. Similarly, if both the
     /// source and destinations are both files or both directories.
-    pub fn is_complete(&self, retries: usize, retry_delay: Duration) -> io::Result<bool> {
-        let a = try!(util::metadata_retry(&self.src, retries, retry_delay));
+    pub fn is_complete(
+        &self,
+        retries: usize,
+        retry_delay: Duration,
+    ) -> io::Result<bool> {
+        let a = util::metadata_retry(&self.src, retries, retry_delay)?;
         let b = util::metadata_retry(&self.dest, retries, retry_delay);
 
         if b.is_err() {
@@ -78,20 +88,31 @@ impl CopyOp {
         if a.len() != b.len() {
             trace!("{}: length {} != {}", self, a.len(), b.len());
             Ok(false)
-        }
-        else if a.file_type() != b.file_type() {
-            trace!("{}: file_type {:?} != {:?}", self, a.file_type(), b.file_type());
+        } else if a.file_type() != b.file_type() {
+            trace!(
+                "{}: file_type {:?} != {:?}",
+                self,
+                a.file_type(),
+                b.file_type()
+            );
             Ok(false)
-        }
-        else if a.modified().unwrap() != b.modified().unwrap() {
-            trace!("{}: modified {:?} != {:?}", self, a.modified().unwrap(), b.modified().unwrap());
+        } else if a.modified().unwrap() != b.modified().unwrap() {
+            trace!(
+                "{}: modified {:?} != {:?}",
+                self,
+                a.modified().unwrap(),
+                b.modified().unwrap()
+            );
             Ok(false)
-        }
-        else if a.permissions().readonly() != b.permissions().readonly() {
-            trace!("{}: readonly {:?} != {:?}", self, a.permissions().readonly(), b.permissions().readonly());
+        } else if a.permissions().readonly() != b.permissions().readonly() {
+            trace!(
+                "{}: readonly {:?} != {:?}",
+                self,
+                a.permissions().readonly(),
+                b.permissions().readonly()
+            );
             Ok(false)
-        }
-        else {
+        } else {
             Ok(true)
         }
     }

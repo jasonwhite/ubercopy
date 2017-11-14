@@ -20,8 +20,7 @@
 
 /// Represents a *change*. That is, if an item was added or removed.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub enum Change
-{
+pub enum Change {
     Added,
     Removed,
     None,
@@ -29,8 +28,7 @@ pub enum Change
 
 /// An iterator for stepping through two iterators (whose items are sorted).
 /// Yields a `Change` for each item.
-pub struct Changes<I: Iterator>
-{
+pub struct Changes<I: Iterator> {
     a: I,
     b: I,
 
@@ -39,7 +37,8 @@ pub struct Changes<I: Iterator>
 }
 
 impl<I> Changes<I>
-    where I: Iterator
+where
+    I: Iterator,
 {
     pub fn new(a: I, b: I) -> Self {
         let mut changes = Changes {
@@ -57,8 +56,9 @@ impl<I> Changes<I>
 }
 
 impl<I> Iterator for Changes<I>
-    where I: Iterator,
-          I::Item: PartialOrd
+where
+    I: Iterator,
+    I::Item: PartialOrd,
 {
     type Item = (I::Item, Change);
 
@@ -70,31 +70,29 @@ impl<I> Iterator for Changes<I>
                     self.next_a = self.a.next();
                     self.next_b = Some(b);
                     Some((a, Change::Removed))
-                }
-                else if b < a {
+                } else if b < a {
                     self.next_a = Some(a);
                     self.next_b = self.b.next();
                     Some((b, Change::Added))
-                }
-                else {
+                } else {
                     // No change. Elements are the same.
                     self.next_a = self.a.next();
                     self.next_b = self.b.next();
                     Some((a, Change::None))
                 }
-            },
+            }
 
             // Only elements remaining are on left side
             (Some(a), None) => {
                 self.next_a = self.a.next();
                 Some((a, Change::Removed))
-            },
+            }
 
             // Only elements remaining are on right side
             (None, Some(b)) => {
                 self.next_b = self.b.next();
                 Some((b, Change::Added))
-            },
+            }
 
             // No elements on either left or right side
             (None, None) => None,
@@ -104,14 +102,14 @@ impl<I> Iterator for Changes<I>
 
 /// An iterator adaptor that counts the number of times an element occurs
 /// consecutively in an iterator.
-pub struct Adjacent<I: Iterator>
-{
+pub struct Adjacent<I: Iterator> {
     iter: I,
     prev: Option<I::Item>,
 }
 
 impl<I> Adjacent<I>
-    where I: Iterator
+where
+    I: Iterator,
 {
     pub fn new(iter: I) -> Self {
         let mut adj = Adjacent {
@@ -125,8 +123,9 @@ impl<I> Adjacent<I>
 }
 
 impl<I> Iterator for Adjacent<I>
-    where I: Iterator,
-          I::Item: PartialEq
+where
+    I: Iterator,
+    I::Item: PartialEq,
 {
     type Item = (I::Item, usize);
 
@@ -143,8 +142,7 @@ impl<I> Iterator for Adjacent<I>
 
             if self.prev == elem {
                 count += 1;
-            }
-            else {
+            } else {
                 let ret = Some((self.prev.take().unwrap(), count));
                 self.prev = elem;
                 return ret;
@@ -154,13 +152,15 @@ impl<I> Iterator for Adjacent<I>
 }
 
 pub struct Unique<I>
-    where I: Iterator
+where
+    I: Iterator,
 {
     iter: Adjacent<I>,
 }
 
 impl<I> Unique<I>
-    where I: Iterator
+where
+    I: Iterator,
 {
     pub fn new(iter: I) -> Self {
         Unique { iter: Adjacent::new(iter) }
@@ -168,8 +168,9 @@ impl<I> Unique<I>
 }
 
 impl<I> Iterator for Unique<I>
-    where I: Iterator,
-          I::Item: PartialEq
+where
+    I: Iterator,
+    I::Item: PartialEq,
 {
     type Item = I::Item;
 
@@ -178,27 +179,34 @@ impl<I> Iterator for Unique<I>
     }
 }
 
-pub trait IterExt : Iterator {
+pub trait IterExt: Iterator {
     fn changes(self, other: Self) -> Changes<Self>
-        where Self : Sized
+    where
+        Self: Sized,
     {
         Changes::new(self, other)
     }
 
     fn adjacent(self) -> Adjacent<Self>
-        where Self : Sized
+    where
+        Self: Sized,
     {
         Adjacent::new(self)
     }
 
     fn unique(self) -> Unique<Self>
-        where Self : Sized
+    where
+        Self: Sized,
     {
         Unique::new(self)
     }
 }
 
-impl<T: ?Sized> IterExt for T where T: Iterator { }
+impl<T: ?Sized> IterExt for T
+where
+    T: Iterator,
+{
+}
 
 #[cfg(test)]
 mod tests {
@@ -213,8 +221,8 @@ mod tests {
 
     #[test]
     fn changes_base_case() {
-        let a : Vec<u32> = vec![];
-        let b : Vec<u32> = vec![];
+        let a: Vec<u32> = vec![];
+        let b: Vec<u32> = vec![];
 
         let mut c = a.iter().changes(b.iter());
         assert_eq!(c.next(), None);
@@ -222,8 +230,8 @@ mod tests {
 
     #[test]
     fn changes_left_only() {
-        let a : Vec<u32> = vec![1];
-        let b : Vec<u32> = vec![];
+        let a: Vec<u32> = vec![1];
+        let b: Vec<u32> = vec![];
 
         let mut c = a.iter().changes(b.iter());
         assert_eq!(c.next(), Some((&1, Change::Removed)));
@@ -232,8 +240,8 @@ mod tests {
 
     #[test]
     fn changes_right_only() {
-        let a : Vec<u32> = vec![];
-        let b : Vec<u32> = vec![1];
+        let a: Vec<u32> = vec![];
+        let b: Vec<u32> = vec![1];
 
         let mut c = a.iter().changes(b.iter());
         assert_eq!(c.next(), Some((&1, Change::Added)));
@@ -257,7 +265,7 @@ mod tests {
 
     #[test]
     fn adjacent_base_case() {
-        let v : Vec<u32> = vec![];
+        let v: Vec<u32> = vec![];
         let mut adj = v.iter().adjacent();
         assert_eq!(adj.next(), None);
         assert_eq!(adj.next(), None);

@@ -84,7 +84,7 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::OVERLAP)
-            },
+            }
             SyncError::Duplicates(ref duplicates) => {
                 writeln!(f, "Duplicate destinations:")?;
 
@@ -93,7 +93,7 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::DUPLICATES)
-            },
+            }
             SyncError::MissingSrcs(ref errors) => {
                 writeln!(f, "Error finding out-of-date copy operations:")?;
 
@@ -102,7 +102,7 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::MISSING_SOURCES)
-            },
+            }
             SyncError::CreateDirs(ref errors) => {
                 writeln!(f, "Failed to create destination directories:")?;
 
@@ -111,7 +111,7 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::CREATE_DIRS)
-            },
+            }
             SyncError::Delete(ref failed) => {
                 writeln!(f, "Failed to delete the following files:")?;
 
@@ -120,7 +120,7 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::DELETE)
-            },
+            }
             SyncError::DeleteDirs(ref failed) => {
                 writeln!(f, "Failed to delete the following directories:")?;
 
@@ -129,7 +129,7 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::DELETE_DIRS)
-            },
+            }
             SyncError::Copy(ref errors) => {
                 writeln!(f, "Failed copies:")?;
 
@@ -138,17 +138,20 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::COPIES)
-            },
+            }
             SyncError::SanityNotCopied(ref ops) => {
-                writeln!(f, "Sanity check failed! The following sources and \
-                           destinations are not in sync:")?;
+                writeln!(
+                    f,
+                    "Sanity check failed! The following sources and \
+                           destinations are not in sync:"
+                )?;
 
                 for op in ops {
                     writeln!(f, " - {}", op)?;
                 }
 
                 writeln!(f, "{}", errors::SANITY_NOT_COPIED)
-            },
+            }
             SyncError::SanityErrors(ref errors) => {
                 writeln!(f, "Error performing post-copy sanity check:")?;
 
@@ -157,17 +160,20 @@ impl<'a> fmt::Display for SyncError<'a> {
                 }
 
                 writeln!(f, "{}", errors::SANITY_ERRORS)
-            },
+            }
         }
     }
 }
 
 /// Returns an Error result if there are race conditions. Assumes `next_srcs`
 /// and `next_dests` are sorted.
-fn check_races<'a>(next_srcs: &[&'a Path], next_dests: &[&'a Path])
-    -> Result<(), SyncError<'a>>
-{
-    let overlap : Vec<_> = next_srcs.iter().changes(next_dests.iter())
+fn check_races<'a>(
+    next_srcs: &[&'a Path],
+    next_dests: &[&'a Path],
+) -> Result<(), SyncError<'a>> {
+    let overlap: Vec<_> = next_srcs
+        .iter()
+        .changes(next_dests.iter())
         .filter(|&(_, ref c)| c == &Change::None)
         .map(|(e, _)| *e)
         .collect();
@@ -176,7 +182,7 @@ fn check_races<'a>(next_srcs: &[&'a Path], next_dests: &[&'a Path])
         return Err(SyncError::Overlap(overlap));
     }
 
-    let duplicates : Vec<_> = next_dests.iter().adjacent()
+    let duplicates: Vec<_> = next_dests.iter().adjacent()
         .filter(|&(_, ref count)| *count > 1) // Duplicates
         .map(|(e, ref count)| (*e, *count))
         .collect();
@@ -215,15 +221,16 @@ fn check_races<'a>(next_srcs: &[&'a Path], next_dests: &[&'a Path])
 ///     equal and that all files exist. This is to help catch bugs in this
 ///     program.
 #[allow(unused_variables)]
-pub fn sync<'a>(prev: &'a Manifest,
-                next: &'a Manifest,
-                dryrun: bool,
-                force:  bool,
-                sanity: bool,
-                threads: usize,
-                retries: usize,
-                retry_delay: Duration,
-                ) -> Result<usize, SyncError<'a>> {
+pub fn sync<'a>(
+    prev: &'a Manifest,
+    next: &'a Manifest,
+    dryrun: bool,
+    force: bool,
+    sanity: bool,
+    threads: usize,
+    retries: usize,
+    retry_delay: Duration,
+) -> Result<usize, SyncError<'a>> {
 
     info!("Creating thread pool with {} threads", threads);
 
@@ -235,12 +242,13 @@ pub fn sync<'a>(prev: &'a Manifest,
 
     // 1. Check for race conditions.
     info!("Checking for race conditions");
-    try!(check_races(&next_srcs, &next_dests));
+    check_races(&next_srcs, &next_dests)?;
 
     // 2. Compare the destinations of `prev` with that of `next` to see which
     //    ones need to be deleted from disk.
-    let to_delete : Vec<&Path> =
-        prev_dests.iter().changes(next_dests.iter())
+    let to_delete: Vec<&Path> = prev_dests
+        .iter()
+        .changes(next_dests.iter())
         .filter(|&(e, ref c)| c == &Change::Removed)
         .map(|(e, c)| *e)
         .collect();
@@ -249,8 +257,7 @@ pub fn sync<'a>(prev: &'a Manifest,
         for f in &to_delete {
             debug!("Deleting destination {:?}", f);
         }
-    }
-    else {
+    } else {
         // TODO: Move all this to a separate function.
         let (tx, rx) = sync_channel(32);
 
@@ -260,11 +267,13 @@ pub fn sync<'a>(prev: &'a Manifest,
 
                 let tx = tx.clone();
                 scope.execute(move || {
-                    tx.send((*f, util::remove_file_retry(f, retries, retry_delay))).unwrap();
+                    tx.send(
+                        (*f, util::remove_file_retry(f, retries, retry_delay)),
+                    ).unwrap();
                 });
             }
 
-            let mut failed : Vec<(&'a Path, io::Error)> = Vec::new();
+            let mut failed: Vec<(&'a Path, io::Error)> = Vec::new();
 
             for (f, result) in rx.iter().take(to_delete.len()) {
                 if let Err(err) = result {
@@ -281,10 +290,11 @@ pub fn sync<'a>(prev: &'a Manifest,
     }
 
     {
-        let mut failed : Vec<(&Path, io::Error)> = Vec::new();
+        let mut failed: Vec<(&Path, io::Error)> = Vec::new();
 
         // Try deleting parent directories as well.
-        let parent_dirs = to_delete.iter()
+        let parent_dirs = to_delete
+            .iter()
             .filter_map(|p| p.removable_parent())
             .unique();
 
@@ -292,7 +302,12 @@ pub fn sync<'a>(prev: &'a Manifest,
             debug!("Deleting directory {:?}", dir);
 
             if !dryrun {
-                if let Err(error) = util::remove_empty_dirs(dir, retries, retry_delay) {
+                if let Err(error) = util::remove_empty_dirs(
+                    dir,
+                    retries,
+                    retry_delay,
+                )
+                {
                     failed.push((dir, error));
                 }
             }
@@ -314,15 +329,16 @@ pub fn sync<'a>(prev: &'a Manifest,
 
     {
         // 4. Create parent directories for modified files.
-        let mut dirs : Vec<&Path> = outdated.iter()
+        let mut dirs: Vec<&Path> = outdated
+            .iter()
             .filter_map(|op| op.dest.removable_parent())
             .collect();
 
         dirs.sort();
 
-        let dirs : Vec<&Path> = dirs.iter().unique().map(|p| *p).collect();
+        let dirs: Vec<&Path> = dirs.iter().unique().map(|p| *p).collect();
 
-        let mut failed : Vec<(&'a Path, io::Error)> = Vec::new();
+        let mut failed: Vec<(&'a Path, io::Error)> = Vec::new();
 
         for dir in dirs {
             debug!("Creating directory {:?}", dir);
@@ -346,8 +362,7 @@ pub fn sync<'a>(prev: &'a Manifest,
         for op in &outdated {
             debug!("Copying {}", op);
         }
-    }
-    else {
+    } else {
         let (tx, rx) = sync_channel(32);
 
         let failed = pool.scoped(|scope| {
@@ -361,7 +376,7 @@ pub fn sync<'a>(prev: &'a Manifest,
                 });
             }
 
-            let mut failed : Vec<(&CopyOp, io::Error)> = Vec::new();
+            let mut failed: Vec<(&CopyOp, io::Error)> = Vec::new();
 
             for (op, result) in rx.iter().take(outdated.len()) {
                 if let Err(err) = result {
@@ -387,7 +402,7 @@ pub fn sync<'a>(prev: &'a Manifest,
                 if !ops.is_empty() {
                     return Err(SyncError::SanityNotCopied(ops));
                 }
-            },
+            }
             Err(errors) => return Err(SyncError::SanityErrors(errors)),
         };
     }

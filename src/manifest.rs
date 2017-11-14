@@ -32,23 +32,27 @@ use util::PathExt;
 
 /// Represents a manifest. A manifest is simply a sequence of copy operations.
 pub struct Manifest {
-    operations: Vec<CopyOp>
+    operations: Vec<CopyOp>,
 }
 
 impl Manifest {
-
     pub fn new() -> Manifest {
-        Manifest {operations: vec![]}
+        Manifest { operations: vec![] }
     }
 
-    pub fn parse_reader<R, P>(reader: R, dest_dir: P,
-                              sandbox_src: bool, sandbox_dest: bool
-                              ) -> Result<Self, String>
-        where R: io::BufRead, P: AsRef<Path>
+    pub fn parse_reader<R, P>(
+        reader: R,
+        dest_dir: P,
+        sandbox_src: bool,
+        sandbox_dest: bool,
+    ) -> Result<Self, String>
+    where
+        R: io::BufRead,
+        P: AsRef<Path>,
     {
         let dest_dir = dest_dir.as_ref();
 
-        let mut operations : Vec<CopyOp> = Vec::new();
+        let mut operations: Vec<CopyOp> = Vec::new();
 
         for (i, line) in reader.lines().enumerate() {
 
@@ -62,21 +66,29 @@ impl Manifest {
 
             let mut s = line.split('\t');
 
-            let src = try!(s.next().ok_or(
-                    format!("Missing source file on line {}", i+1)));
-            let dest = try!(s.next().ok_or(
-                    format!("Missing destination file on line {}", i+1)));
+            let src = s.next().ok_or(
+                format!("Missing source file on line {}", i + 1),
+            )?;
+            let dest = s.next().ok_or(format!(
+                "Missing destination file on line {}",
+                i + 1
+            ))?;
 
             let src_path = Path::new(src).norm();
 
             if sandbox_src && !src_path.is_sandboxed() {
-                return Err(format!("source path {:?} is not sandboxed", src_path));
+                return Err(
+                    format!("source path {:?} is not sandboxed", src_path),
+                );
             }
 
             let dest_path = Path::new(dest).norm();
 
             if sandbox_dest && !dest_path.is_sandboxed() {
-                return Err(format!("destination path {:?} is not sandboxed", dest_path));
+                return Err(format!(
+                    "destination path {:?} is not sandboxed",
+                    dest_path
+                ));
             }
 
             let dest_path = if dest_dir.is_empty() {
@@ -98,29 +110,39 @@ impl Manifest {
         // them here so that we don't get errors about duplicate destinations.
         operations.dedup();
 
-        Ok(Manifest {operations: operations})
+        Ok(Manifest { operations: operations })
     }
 
-    pub fn parse<P>(path: P, dest: P,
-                    sandbox_src: bool, sandbox_dest: bool
-                    ) -> Result<Self, String>
-        where P: AsRef<Path>
+    pub fn parse<P>(
+        path: P,
+        dest: P,
+        sandbox_src: bool,
+        sandbox_dest: bool,
+    ) -> Result<Self, String>
+    where
+        P: AsRef<Path>,
     {
-        let f = try!(File::open(path).map_err(|e| e.to_string()));
-        Manifest::parse_reader(io::BufReader::new(f), dest,
-                               sandbox_src, sandbox_dest)
+        let f = File::open(path).map_err(|e| e.to_string())?;
+        Manifest::parse_reader(
+            io::BufReader::new(f),
+            dest,
+            sandbox_src,
+            sandbox_dest,
+        )
     }
 
     /// Returns a sorted list of all sources.
     pub fn srcs(&self) -> Vec<&Path> {
-        self.operations().iter()
+        self.operations()
+            .iter()
             .map(|op| op.src.as_path())
             .collect()
     }
 
     /// Returns a sorted list of all destinations.
     pub fn dests(&self) -> Vec<&Path> {
-        let mut dests : Vec<&Path> = self.operations().iter()
+        let mut dests: Vec<&Path> = self.operations()
+            .iter()
             .map(|op| op.dest.as_path())
             .collect();
         dests.sort();
@@ -135,14 +157,18 @@ impl Manifest {
     /// List of copy operations that need to occur in order to bring the
     /// destinations up-to-date. This also checks if the source location exists.
     /// If not, then an error result for that copy operation is returned.
-    pub fn outdated(&self, force: bool, pool: &Pool, retries: usize, retry_delay: Duration)
-        -> Result<Vec<&CopyOp>, Vec<(&CopyOp, io::Error)>>
-    {
+    pub fn outdated(
+        &self,
+        force: bool,
+        pool: &Pool,
+        retries: usize,
+        retry_delay: Duration,
+    ) -> Result<Vec<&CopyOp>, Vec<(&CopyOp, io::Error)>> {
         info!("Finding list of outdated copy operations");
 
         if force {
             // Assume all files need to be copied.
-            return Ok(self.operations.iter().collect())
+            return Ok(self.operations.iter().collect());
         }
 
         let (tx, rx) = sync_channel(32);
@@ -151,18 +177,19 @@ impl Manifest {
             for op in &self.operations {
                 let tx = tx.clone();
                 scope.execute(move || {
-                    tx.send((op, op.is_complete(retries, retry_delay))).unwrap();
+                    tx.send((op, op.is_complete(retries, retry_delay)))
+                        .unwrap();
                 });
             }
 
-            let mut errors : Vec<(&CopyOp, io::Error)> = Vec::new();
-            let mut result : Vec<&CopyOp> = Vec::new();
+            let mut errors: Vec<(&CopyOp, io::Error)> = Vec::new();
+            let mut result: Vec<&CopyOp> = Vec::new();
 
             for (op, complete) in rx.iter().take(self.operations.len()) {
                 match complete {
                     Ok(false) => result.push(op),
-                    Ok(true)  => {},
-                    Err(err)  => errors.push((op, err)),
+                    Ok(true) => {}
+                    Err(err) => errors.push((op, err)),
                 };
             }
 
@@ -172,8 +199,7 @@ impl Manifest {
         if errors.is_empty() {
             info!("Found {} outdated copy operations", result.len());
             Ok(result)
-        }
-        else {
+        } else {
             Err(errors)
         }
     }
