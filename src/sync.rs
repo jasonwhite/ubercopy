@@ -25,7 +25,6 @@ use copyop::CopyOp;
 
 use std::io;
 use std::fs;
-use std::fmt;
 use std::time::Duration;
 use iter::{Change, IterExt};
 use std::sync::mpsc::sync_channel;
@@ -33,144 +32,14 @@ use std::sync::mpsc::sync_channel;
 use std::path::Path;
 use util;
 use util::PathExt;
-use errors;
-
-pub enum SyncError<'a> {
-    /// There are one or more paths that are common to both the source and
-    /// destinations in the *next* manifest. Since source files can be copied to
-    /// corresponding destinations in any order, this indicates a race
-    /// condition.
-    Overlap(Vec<&'a Path>),
-
-    /// There are one or more paths that are duplicated in the destinations of
-    /// the *next* manifest.
-    Duplicates(Vec<(&'a Path, usize)>),
-
-    /// There are one or more missing source files in the *next* manifest.
-    /// Obviously, we can't copy what doesn't exist.
-    MissingSrcs(Vec<(&'a CopyOp, io::Error)>),
-
-    /// Some directories failed to get created.
-    CreateDirs(Vec<(&'a Path, io::Error)>),
-
-    /// There are one or more files that failed to get deleted.
-    Delete(Vec<(&'a Path, io::Error)>),
-
-    /// There are one or more directories that failed to get deleted.
-    DeleteDirs(Vec<(&'a Path, io::Error)>),
-
-    /// There are one or more files that failed to get copied.
-    Copy(Vec<(&'a CopyOp, io::Error)>),
-
-    /// There are outdated copy operations after the copy. This should never
-    /// happen and indicates a bug in Ubercopy.
-    SanityNotCopied(Vec<&'a CopyOp>),
-
-    /// There were failures when trying to determine outdated copy operations.
-    /// This can happen if a source file was removed just after it was copied,
-    /// but before we did the sanity check. This indicates a race condition with
-    /// some other process.
-    SanityErrors(Vec<(&'a CopyOp, io::Error)>),
-}
-
-impl<'a> fmt::Display for SyncError<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            SyncError::Overlap(ref overlap) => {
-                writeln!(f, "Overlapping sources and destinations:")?;
-
-                for path in overlap {
-                    writeln!(f, " - {:?}", path)?;
-                }
-
-                writeln!(f, "{}", errors::OVERLAP)
-            }
-            SyncError::Duplicates(ref duplicates) => {
-                writeln!(f, "Duplicate destinations:")?;
-
-                for &(path, count) in duplicates {
-                    writeln!(f, " - {:?} ({} duplicates)", path, count)?;
-                }
-
-                writeln!(f, "{}", errors::DUPLICATES)
-            }
-            SyncError::MissingSrcs(ref errors) => {
-                writeln!(f, "Error finding out-of-date copy operations:")?;
-
-                for &(op, ref err) in errors {
-                    writeln!(f, " - {:?}: {}", op.src, err)?;
-                }
-
-                writeln!(f, "{}", errors::MISSING_SOURCES)
-            }
-            SyncError::CreateDirs(ref errors) => {
-                writeln!(f, "Failed to create destination directories:")?;
-
-                for &(dir, ref err) in errors {
-                    writeln!(f, " - {:?}: {}", dir, err)?;
-                }
-
-                writeln!(f, "{}", errors::CREATE_DIRS)
-            }
-            SyncError::Delete(ref failed) => {
-                writeln!(f, "Failed to delete the following files:")?;
-
-                for &(path, ref err) in failed {
-                    writeln!(f, " - {:?}: {}", path, err)?;
-                }
-
-                writeln!(f, "{}", errors::DELETE)
-            }
-            SyncError::DeleteDirs(ref failed) => {
-                writeln!(f, "Failed to delete the following directories:")?;
-
-                for &(dir, ref err) in failed {
-                    writeln!(f, " - {:?}: {}", dir, err)?;
-                }
-
-                writeln!(f, "{}", errors::DELETE_DIRS)
-            }
-            SyncError::Copy(ref errors) => {
-                writeln!(f, "Failed copies:")?;
-
-                for &(op, ref err) in errors {
-                    writeln!(f, " - {:?} ({})", op.src, err)?;
-                }
-
-                writeln!(f, "{}", errors::COPIES)
-            }
-            SyncError::SanityNotCopied(ref ops) => {
-                writeln!(
-                    f,
-                    "Sanity check failed! The following sources and \
-                           destinations are not in sync:"
-                )?;
-
-                for op in ops {
-                    writeln!(f, " - {}", op)?;
-                }
-
-                writeln!(f, "{}", errors::SANITY_NOT_COPIED)
-            }
-            SyncError::SanityErrors(ref errors) => {
-                writeln!(f, "Error performing post-copy sanity check:")?;
-
-                for &(op, ref err) in errors {
-                    writeln!(f, " - {:?} ({})", op.src, err)?;
-                }
-
-                writeln!(f, "{}", errors::SANITY_ERRORS)
-            }
-        }
-    }
-}
+use error::Error;
 
 /// Returns an Error result if there are race conditions. Assumes `next_srcs`
 /// and `next_dests` are sorted.
 fn check_races<'a>(
     next_srcs: &[&'a Path],
     next_dests: &[&'a Path],
-) -> Result<(), SyncError<'a>> {
+) -> Result<(), Error<'a>> {
     let overlap: Vec<_> = next_srcs
         .iter()
         .changes(next_dests.iter())
@@ -179,7 +48,7 @@ fn check_races<'a>(
         .collect();
 
     if !overlap.is_empty() {
-        return Err(SyncError::Overlap(overlap));
+        return Err(Error::Overlap(overlap));
     }
 
     let duplicates: Vec<_> = next_dests.iter().adjacent()
@@ -188,7 +57,7 @@ fn check_races<'a>(
         .collect();
 
     if !duplicates.is_empty() {
-        return Err(SyncError::Duplicates(duplicates));
+        return Err(Error::Duplicates(duplicates));
     }
 
     Ok(())
@@ -220,7 +89,6 @@ fn check_races<'a>(
 ///  6. Do a sanity check (if `sanity == true`) to make sure all timestamps are
 ///     equal and that all files exist. This is to help catch bugs in this
 ///     program.
-#[allow(unused_variables)]
 pub fn sync<'a>(
     prev: &'a Manifest,
     next: &'a Manifest,
@@ -230,7 +98,7 @@ pub fn sync<'a>(
     threads: usize,
     retries: usize,
     retry_delay: Duration,
-) -> Result<usize, SyncError<'a>> {
+) -> Result<usize, Error<'a>> {
 
     info!("Creating thread pool with {} threads", threads);
 
@@ -249,8 +117,8 @@ pub fn sync<'a>(
     let to_delete: Vec<&Path> = prev_dests
         .iter()
         .changes(next_dests.iter())
-        .filter(|&(e, ref c)| c == &Change::Removed)
-        .map(|(e, c)| *e)
+        .filter(|&(_, ref c)| c == &Change::Removed)
+        .map(|(e, _)| *e)
         .collect();
 
     if dryrun {
@@ -285,7 +153,7 @@ pub fn sync<'a>(
         });
 
         if !failed.is_empty() {
-            return Err(SyncError::Delete(failed));
+            return Err(Error::Delete(failed));
         }
     }
 
@@ -314,7 +182,7 @@ pub fn sync<'a>(
         }
 
         if !failed.is_empty() {
-            return Err(SyncError::DeleteDirs(failed));
+            return Err(Error::DeleteDirs(failed));
         }
     }
 
@@ -322,7 +190,7 @@ pub fn sync<'a>(
     let outdated = next.outdated(force, &pool, retries, retry_delay);
 
     if let Err(errors) = outdated {
-        return Err(SyncError::MissingSrcs(errors));
+        return Err(Error::MissingSrcs(errors));
     }
 
     let outdated = outdated.unwrap();
@@ -351,7 +219,7 @@ pub fn sync<'a>(
         }
 
         if !failed.is_empty() {
-            return Err(SyncError::CreateDirs(failed));
+            return Err(Error::CreateDirs(failed));
         }
     }
 
@@ -388,7 +256,7 @@ pub fn sync<'a>(
         });
 
         if !failed.is_empty() {
-            return Err(SyncError::Copy(failed));
+            return Err(Error::Copy(failed));
         }
     }
 
@@ -400,10 +268,10 @@ pub fn sync<'a>(
         match next.outdated(false, &pool, retries, retry_delay) {
             Ok(ops) => {
                 if !ops.is_empty() {
-                    return Err(SyncError::SanityNotCopied(ops));
+                    return Err(Error::SanityNotCopied(ops));
                 }
             }
-            Err(errors) => return Err(SyncError::SanityErrors(errors)),
+            Err(errors) => return Err(Error::SanityErrors(errors)),
         };
     }
 

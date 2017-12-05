@@ -30,7 +30,7 @@ extern crate libc;
 
 mod args;
 mod copyop;
-mod errors;
+mod error;
 mod iter;
 mod manifest;
 mod sync;
