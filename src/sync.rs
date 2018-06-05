@@ -94,7 +94,7 @@ pub fn sync<'a>(
     next: &'a Manifest,
     dryrun: bool,
     force: bool,
-    sanity: bool,
+    verify_copy: bool,
     threads: usize,
     retries: usize,
     retry_delay: Duration,
@@ -260,18 +260,18 @@ pub fn sync<'a>(
         }
     }
 
-    // 6. Do a sanity check.
-    if sanity && !dryrun {
-        info!("Performing sanity check");
+    // 6. Verify all files have been copied successfully.
+    if verify_copy && !dryrun {
+        info!("Performing post-copy verification");
 
         // There should be *no* outdated files at this point.
         match next.outdated(false, &pool, retries, retry_delay) {
             Ok(ops) => {
                 if !ops.is_empty() {
-                    return Err(Error::SanityNotCopied(ops));
+                    return Err(Error::VerifyIncomplete(ops));
                 }
             }
-            Err(errors) => return Err(Error::SanityErrors(errors)),
+            Err(errors) => return Err(Error::VerifyErrors(errors)),
         };
     }
 

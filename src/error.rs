@@ -55,13 +55,13 @@ pub enum Error<'a> {
 
     /// There are outdated copy operations after the copy. This should never
     /// happen and indicates a bug in Ubercopy.
-    SanityNotCopied(Vec<&'a CopyOp>),
+    VerifyIncomplete(Vec<&'a CopyOp>),
 
     /// There were failures when trying to determine outdated copy operations.
     /// This can happen if a source file was removed just after it was copied,
     /// but before we did the sanity check. This indicates a race condition with
     /// some other process.
-    SanityErrors(Vec<(&'a CopyOp, io::Error)>),
+    VerifyErrors(Vec<(&'a CopyOp, io::Error)>),
 }
 
 impl<'a> StdError for Error<'a> {
@@ -74,8 +74,8 @@ impl<'a> StdError for Error<'a> {
             Error::Delete(_) => "Failed to delete the following files",
             Error::DeleteDirs(_) => "Failed to delete the following directories",
             Error::Copy(_) => "Failed to copy file(s)",
-            Error::SanityNotCopied(_) => "Sanity check failed",
-            Error::SanityErrors(_) => "Failed trying to perform sanity check",
+            Error::VerifyIncomplete(_) => "Verification check failed",
+            Error::VerifyErrors(_) => "Failed trying to perform verification check",
         }
     }
 }
@@ -105,19 +105,17 @@ Error: The above destination directories failed to get deleted.";
 const COPIES: &'static str = "\
 Error: The copy operations listed above failed.";
 
-const SANITY_NOT_COPIED: &'static str = "\
+const VERIFICATION_INCOMPLETE: &'static str = "\
 Error: The copy operation(s) listed above are still incomplete even after
        copying them. This can happen if a file was modified by another process
-       during the copy. Simply re-running the copy usually fixes it. This sanity
-       check can be skipped with the `--skip-sanity` flag.";
+       during the copy. Simply re-running the copy usually fixes it.";
 
-const SANITY_ERRORS: &'static str = "\
-Error: Post-copy error. The source file(s) listed above are either missing or
-       have some other problem. This can happen if a source file was removed or
-       changed somehow just after it was copied to the destination. This
-       indicates a race condition with some other process. Make sure nothing
-       else is messing with these files during the copy. This sanity check can
-       be skipped with the `--skip-sanity` flag.";
+const VERIFICATION_ERRORS: &'static str = "\
+Error: Copy verification failed. The source file(s) listed above are either
+       missing or have some other problem. This can happen if a source file was
+       removed or changed somehow just after it was copied to the destination.
+       This indicates a race condition with some other process. Make sure
+       nothing else is messing with these files during the copy.";
 
 impl<'a> fmt::Display for Error<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -173,19 +171,19 @@ impl<'a> fmt::Display for Error<'a> {
 
                 writeln!(f, "{}", COPIES)
             }
-            Error::SanityNotCopied(ref ops) => {
+            Error::VerifyIncomplete(ref ops) => {
                 for op in ops {
                     writeln!(f, " - {}", op)?;
                 }
 
-                writeln!(f, "{}", SANITY_NOT_COPIED)
+                writeln!(f, "{}", VERIFICATION_INCOMPLETE)
             }
-            Error::SanityErrors(ref errors) => {
+            Error::VerifyErrors(ref errors) => {
                 for &(op, ref err) in errors {
                     writeln!(f, " - {:?} ({})", op.src, err)?;
                 }
 
-                writeln!(f, "{}", SANITY_ERRORS)
+                writeln!(f, "{}", VERIFICATION_ERRORS)
             }
         }
     }

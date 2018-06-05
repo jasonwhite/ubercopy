@@ -155,7 +155,7 @@ fn main() {
         &next.unwrap(),
         args.dryrun,
         args.force,
-        !args.skip_sanity,
+        args.verify_copy,
         args.threads,
         args.retries,
         Duration::from_secs(1),

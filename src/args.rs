@@ -26,7 +26,7 @@ use clap::{App, AppSettings, Arg, ArgMatches};
 pub struct Args {
     pub dryrun: bool,
     pub force: bool,
-    pub skip_sanity: bool,
+    pub verify_copy: bool,
     pub sandbox_src: bool,
     pub sandbox_dest: bool,
     pub threads: usize,
@@ -59,11 +59,9 @@ impl Args {
                     .long("force")
                     .short("f"),
 
-                Arg::with_name("skip-sanity")
-                    .help("Skip doing a sanity check after copying all the \
-                          files.")
-                    .long("skip-sanity")
-                    .short("S"),
+                Arg::with_name("verify-copy")
+                    .help("After copying, verify that all files match.")
+                    .long("verify-copy"),
 
                 Arg::with_name("sandbox-src")
                     .help("Don't allow source paths to escape the current \
@@ -122,7 +120,7 @@ impl Args {
         Args {
             dryrun: matches.is_present("dryrun"),
             force: matches.is_present("force"),
-            skip_sanity: matches.is_present("skip-sanity"),
+            verify_copy: matches.is_present("verify-copy"),
             sandbox_src: matches.is_present("sandbox") ||
                 matches.is_present("sandbox-src"),
             sandbox_dest: matches.is_present("sandbox") ||
