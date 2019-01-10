@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Jason White
+// Copyright (c) 2019 Jason White
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -15,18 +15,18 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 use scoped_pool::Pool;
 
 use copyop::CopyOp;
 
-use std::path::{Path, PathBuf};
-use std::io;
 use std::fs::File;
-use std::time::Duration;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::sync_channel;
+use std::time::Duration;
 
 use util::PathExt;
 
@@ -55,7 +55,6 @@ impl Manifest {
         let mut operations: Vec<CopyOp> = Vec::new();
 
         for (i, line) in reader.lines().enumerate() {
-
             let line = line.unwrap();
             let line = line.trim();
 
@@ -66,20 +65,20 @@ impl Manifest {
 
             let mut s = line.split('\t');
 
-            let src = s.next().ok_or(
-                format!("Missing source file on line {}", i + 1),
-            )?;
-            let dest = s.next().ok_or(format!(
-                "Missing destination file on line {}",
-                i + 1
-            ))?;
+            let src = s
+                .next()
+                .ok_or(format!("Missing source file on line {}", i + 1))?;
+            let dest = s
+                .next()
+                .ok_or(format!("Missing destination file on line {}", i + 1))?;
 
             let src_path = Path::new(src).norm();
 
             if sandbox_src && !src_path.is_sandboxed() {
-                return Err(
-                    format!("source path {:?} is not sandboxed", src_path),
-                );
+                return Err(format!(
+                    "source path {:?} is not sandboxed",
+                    src_path
+                ));
             }
 
             let dest_path = Path::new(dest).norm();
@@ -110,7 +109,9 @@ impl Manifest {
         // them here so that we don't get errors about duplicate destinations.
         operations.dedup();
 
-        Ok(Manifest { operations: operations })
+        Ok(Manifest {
+            operations: operations,
+        })
     }
 
     pub fn parse<P>(
@@ -141,7 +142,8 @@ impl Manifest {
 
     /// Returns a sorted list of all destinations.
     pub fn dests(&self) -> Vec<&Path> {
-        let mut dests: Vec<&Path> = self.operations()
+        let mut dests: Vec<&Path> = self
+            .operations()
             .iter()
             .map(|op| op.dest.as_path())
             .collect();

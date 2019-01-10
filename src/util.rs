@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Jason White
+// Copyright (c) 2019 Jason White
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -15,38 +15,38 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
-use std::path::{Path, PathBuf, Component, Prefix};
+use std::ffi;
 use std::fs;
 use std::io;
-use std::ffi;
+use std::path::{Component, Path, PathBuf, Prefix};
 use std::thread;
 use std::time::Duration;
 
 #[cfg(windows)]
 use kernel32;
 #[cfg(windows)]
-use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
-#[cfg(windows)]
-use winapi::um::winnt::{FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN};
+use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
 use winapi::shared::winerror;
 #[cfg(windows)]
-use std::os::windows::ffi::OsStrExt;
+use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
+#[cfg(windows)]
+use winapi::um::winnt::{FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_READONLY};
 
-#[cfg(any(target_os = "linux", target_os = "emscripten"))]
-use libc::{stat64, lstat64, utimensat, timespec, AT_FDCWD};
 #[cfg(all(unix, not(any(target_os = "linux", target_os = "emscripten"))))]
-use libc::{stat as stat64, lstat as lstat64, utimensat, timespec, AT_FDCWD};
+use libc::{lstat as lstat64, stat as stat64, timespec, utimensat, AT_FDCWD};
+#[cfg(any(target_os = "linux", target_os = "emscripten"))]
+use libc::{lstat64, stat64, timespec, utimensat, AT_FDCWD};
 
 #[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
+use libc::{ENOENT, ENOTEMPTY};
 #[cfg(unix)]
 use std::mem;
 #[cfg(unix)]
-use libc::{ENOENT, ENOTEMPTY};
+use std::os::unix::ffi::OsStrExt;
 
 /// Convert a string to UTF-16.
 #[cfg(windows)]
@@ -62,13 +62,11 @@ fn to_u16s<S: AsRef<ffi::OsStr>>(s: S) -> Vec<u16> {
 #[cfg(windows)]
 pub fn remove_dir(path: &Path) -> io::Result<bool> {
     match fs::remove_dir(path) {
-        Err(err) => {
-            match err.raw_os_error().unwrap() as u32 {
-                winerror::ERROR_FILE_NOT_FOUND => Ok(true),
-                winerror::ERROR_DIR_NOT_EMPTY => Ok(false),
-                _ => Err(err),
-            }
-        }
+        Err(err) => match err.raw_os_error().unwrap() as u32 {
+            winerror::ERROR_FILE_NOT_FOUND => Ok(true),
+            winerror::ERROR_DIR_NOT_EMPTY => Ok(false),
+            _ => Err(err),
+        },
         Ok(()) => Ok(true),
     }
 }
@@ -76,13 +74,11 @@ pub fn remove_dir(path: &Path) -> io::Result<bool> {
 #[cfg(unix)]
 pub fn remove_dir(path: &Path) -> io::Result<bool> {
     match fs::remove_dir(path) {
-        Err(err) => {
-            match err.raw_os_error().unwrap() {
-                ENOENT => Ok(true),
-                ENOTEMPTY => Ok(false),
-                _ => Err(err),
-            }
-        }
+        Err(err) => match err.raw_os_error().unwrap() {
+            ENOENT => Ok(true),
+            ENOTEMPTY => Ok(false),
+            _ => Err(err),
+        },
         Ok(()) => Ok(true),
     }
 }
@@ -136,8 +132,8 @@ fn unset_attributes(path: &Path) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
 
-    let new_attribs = attribs &
-        !(FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN);
+    let new_attribs =
+        attribs & !(FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN);
 
     if attribs != new_attribs {
         let ret =
@@ -179,7 +175,7 @@ fn remove_file(path: &Path) -> io::Result<()> {
             if path.is_file() {
                 // The operating system lied to us. The file still exists.
                 Err(io::Error::from_raw_os_error(
-                        winerror::ERROR_FILE_EXISTS as i32
+                    winerror::ERROR_FILE_EXISTS as i32,
                 ))
             } else {
                 Ok(())
@@ -224,7 +220,6 @@ pub fn remove_file_retry(
     }
 }
 
-
 /// Wraps `fs::copy` to be able to fix 'hidden' and 'readonly' attributes on the
 /// `to` path.
 #[cfg(windows)]
@@ -266,7 +261,6 @@ fn lstat(p: &Path) -> io::Result<stat64> {
 
 #[cfg(unix)]
 fn copy_timestamps(from: &Path, to: &Path) -> io::Result<()> {
-
     let to = ffi::CString::new(to.as_os_str().as_bytes())?;
 
     let stat = lstat(from)?;
@@ -315,8 +309,9 @@ pub fn copy_retry(
             match err.kind() {
                 // These errors are not worth retrying as they almost never
                 // succeed with a retry.
-                io::ErrorKind::NotFound |
-                io::ErrorKind::PermissionDenied => Err(err),
+                io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => {
+                    Err(err)
+                }
 
                 // Anything else should have a retry.
                 _ => {
@@ -344,8 +339,9 @@ pub fn metadata_retry(
             match err.kind() {
                 // These errors are not worth retrying as they almost never
                 // succeed with a retry.
-                io::ErrorKind::NotFound |
-                io::ErrorKind::PermissionDenied => Err(err),
+                io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => {
+                    Err(err)
+                }
 
                 // Anything else should have a retry
                 _ => {
@@ -406,9 +402,9 @@ impl PathExt for Path {
             if let Some(c) = components.next() {
                 match c {
                     Component::CurDir => {}
-                    Component::RootDir |
-                    Component::ParentDir |
-                    Component::Normal(_) => {
+                    Component::RootDir
+                    | Component::ParentDir
+                    | Component::Normal(_) => {
                         // Can't add the prefix. It's a relative path.
                         new_path.push(c.as_os_str());
                     }
@@ -440,8 +436,8 @@ impl PathExt for Path {
                 Component::CurDir => {}
                 Component::ParentDir => {
                     let pop = match new_path.components().next_back() {
-                        Some(Component::Prefix(_)) |
-                        Some(Component::RootDir) => true,
+                        Some(Component::Prefix(_))
+                        | Some(Component::RootDir) => true,
                         Some(Component::Normal(s)) => !s.is_empty(),
                         _ => false,
                     };
@@ -482,7 +478,6 @@ impl PathExt for Path {
         self.as_os_str().is_empty()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

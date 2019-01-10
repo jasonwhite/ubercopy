@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Jason White
+// Copyright (c) 2019 Jason White
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -15,8 +15,8 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 /// Represents a *change*. That is, if an item was added or removed.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -130,7 +130,6 @@ where
     type Item = (I::Item, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-
         if self.prev.is_none() {
             return None;
         }
@@ -163,7 +162,9 @@ where
     I: Iterator,
 {
     pub fn new(iter: I) -> Self {
-        Unique { iter: Adjacent::new(iter) }
+        Unique {
+            iter: Adjacent::new(iter),
+        }
     }
 }
 
@@ -202,11 +203,7 @@ pub trait IterExt: Iterator {
     }
 }
 
-impl<T: ?Sized> IterExt for T
-where
-    T: Iterator,
-{
-}
+impl<T: ?Sized> IterExt for T where T: Iterator {}
 
 #[cfg(test)]
 mod tests {

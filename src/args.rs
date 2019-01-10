@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Jason White
+// Copyright (c) 2019 Jason White
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -15,8 +15,8 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 use std::path::PathBuf;
 
@@ -121,20 +121,17 @@ impl Args {
             dryrun: matches.is_present("dryrun"),
             force: matches.is_present("force"),
             verify_copy: matches.is_present("verify-copy"),
-            sandbox_src: matches.is_present("sandbox") ||
-                matches.is_present("sandbox-src"),
-            sandbox_dest: matches.is_present("sandbox") ||
-                matches.is_present("sandbox-dest"),
-            threads: value_t!(matches, "threads", usize).unwrap_or_else(
-                |e| e.exit(),
-            ),
-            retries: value_t!(matches, "retries", usize).unwrap_or_else(
-                |e| e.exit(),
-            ),
-            dest: matches.value_of("dest").map_or(
-                PathBuf::from(""),
-                PathBuf::from,
-            ),
+            sandbox_src: matches.is_present("sandbox")
+                || matches.is_present("sandbox-src"),
+            sandbox_dest: matches.is_present("sandbox")
+                || matches.is_present("sandbox-dest"),
+            threads: value_t!(matches, "threads", usize)
+                .unwrap_or_else(|e| e.exit()),
+            retries: value_t!(matches, "retries", usize)
+                .unwrap_or_else(|e| e.exit()),
+            dest: matches
+                .value_of("dest")
+                .map_or(PathBuf::from(""), PathBuf::from),
             manifest: PathBuf::from(matches.value_of("manifest").unwrap()),
             program: matches.value_of("program").unwrap().to_string(),
             args: match matches.values_of("args") {

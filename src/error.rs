@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Jason White
+// Copyright (c) 2019 Jason White
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -15,8 +15,8 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 use std::error::Error as StdError;
 use std::fmt;
@@ -28,8 +28,8 @@ use copyop::CopyOp;
 #[derive(Debug)]
 pub enum Error<'a> {
     /// There are one or more paths that are common to both the source and
-    /// destinations in the *next* manifest. Since source files can be copied to
-    /// corresponding destinations in any order, this indicates a race
+    /// destinations in the *next* manifest. Since source files can be copied
+    /// to corresponding destinations in any order, this indicates a race
     /// condition.
     Overlap(Vec<&'a Path>),
 
@@ -59,8 +59,8 @@ pub enum Error<'a> {
 
     /// There were failures when trying to determine outdated copy operations.
     /// This can happen if a source file was removed just after it was copied,
-    /// but before we did the sanity check. This indicates a race condition with
-    /// some other process.
+    /// but before we did the sanity check. This indicates a race condition
+    /// with some other process.
     VerifyErrors(Vec<(&'a CopyOp, io::Error)>),
 }
 
@@ -69,13 +69,19 @@ impl<'a> StdError for Error<'a> {
         match *self {
             Error::Overlap(_) => "Overlapping sources and destinations",
             Error::Duplicates(_) => "Duplicate destinations",
-            Error::MissingSrcs(_) => "Error finding out-of-date copy operations",
+            Error::MissingSrcs(_) => {
+                "Error finding out-of-date copy operations"
+            }
             Error::CreateDirs(_) => "Failed to create destination directories",
             Error::Delete(_) => "Failed to delete the following files",
-            Error::DeleteDirs(_) => "Failed to delete the following directories",
+            Error::DeleteDirs(_) => {
+                "Failed to delete the following directories"
+            }
             Error::Copy(_) => "Failed to copy file(s)",
             Error::VerifyIncomplete(_) => "Verification check failed",
-            Error::VerifyErrors(_) => "Failed trying to perform verification check",
+            Error::VerifyErrors(_) => {
+                "Failed trying to perform verification check"
+            }
         }
     }
 }
@@ -93,17 +99,16 @@ const MISSING_SOURCES: &'static str = "\
 Error: The source file(s) listed above are either missing or have some other
        problem. Make sure these files exist and are accessible.";
 
-const CREATE_DIRS: &'static str = "\
-Error: The destination directories listed above failed to get created.";
+const CREATE_DIRS: &'static str =
+    "Error: The destination directories listed above failed to get created.";
 
-const DELETE: &'static str = "\
-Error: The above destination files failed to get deleted.";
+const DELETE: &'static str =
+    "Error: The above destination files failed to get deleted.";
 
-const DELETE_DIRS: &'static str = "\
-Error: The above destination directories failed to get deleted.";
+const DELETE_DIRS: &'static str =
+    "Error: The above destination directories failed to get deleted.";
 
-const COPIES: &'static str = "\
-Error: The copy operations listed above failed.";
+const COPIES: &'static str = "Error: The copy operations listed above failed.";
 
 const VERIFICATION_INCOMPLETE: &'static str = "\
 Error: The copy operation(s) listed above are still incomplete even after

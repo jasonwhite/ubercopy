@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Jason White
+// Copyright (c) 2019 Jason White
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -15,24 +15,24 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 use scoped_pool::Pool;
 
-use manifest::Manifest;
 use copyop::CopyOp;
+use manifest::Manifest;
 
-use std::io;
-use std::fs;
-use std::time::Duration;
 use iter::{Change, IterExt};
+use std::fs;
+use std::io;
 use std::sync::mpsc::sync_channel;
+use std::time::Duration;
 
+use error::Error;
 use std::path::Path;
 use util;
 use util::PathExt;
-use error::Error;
 
 /// Returns an Error result if there are race conditions. Assumes `next_srcs`
 /// and `next_dests` are sorted.
@@ -51,7 +51,9 @@ fn check_races<'a>(
         return Err(Error::Overlap(overlap));
     }
 
-    let duplicates: Vec<_> = next_dests.iter().adjacent()
+    let duplicates: Vec<_> = next_dests
+        .iter()
+        .adjacent()
         .filter(|&(_, ref count)| *count > 1) // Duplicates
         .map(|(e, ref count)| (*e, *count))
         .collect();
@@ -99,7 +101,6 @@ pub fn sync<'a>(
     retries: usize,
     retry_delay: Duration,
 ) -> Result<usize, Error<'a>> {
-
     info!("Creating thread pool with {} threads", threads);
 
     let pool = Pool::new(threads);
@@ -135,9 +136,11 @@ pub fn sync<'a>(
 
                 let tx = tx.clone();
                 scope.execute(move || {
-                    tx.send(
-                        (*f, util::remove_file_retry(f, retries, retry_delay)),
-                    ).unwrap();
+                    tx.send((
+                        *f,
+                        util::remove_file_retry(f, retries, retry_delay),
+                    ))
+                    .unwrap();
                 });
             }
 
@@ -170,11 +173,8 @@ pub fn sync<'a>(
             debug!("Deleting directory {:?}", dir);
 
             if !dryrun {
-                if let Err(error) = util::remove_empty_dirs(
-                    dir,
-                    retries,
-                    retry_delay,
-                )
+                if let Err(error) =
+                    util::remove_empty_dirs(dir, retries, retry_delay)
                 {
                     failed.push((dir, error));
                 }
