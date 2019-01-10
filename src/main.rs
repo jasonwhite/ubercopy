@@ -48,7 +48,6 @@ use std::time::Duration;
 use std::env;
 use std::str::FromStr;
 
-use log::LogLevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::config::{Appender, Config, Root};
@@ -88,11 +87,11 @@ fn main() {
 
     let log_level = match env::var("UBERCOPY_LOG") {
         Ok(val) => {
-            LogLevelFilter::from_str(val.as_str()).unwrap_or(
-                LogLevelFilter::Info,
+            log::LevelFilter::from_str(val.as_str()).unwrap_or(
+                log::LevelFilter::Info,
             )
         }
-        Err(_) => LogLevelFilter::Info,
+        Err(_) => log::LevelFilter::Info,
     };
 
     let stdout =

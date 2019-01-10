@@ -28,11 +28,11 @@ use std::time::Duration;
 #[cfg(windows)]
 use kernel32;
 #[cfg(windows)]
-use winapi::fileapi::INVALID_FILE_ATTRIBUTES;
+use winapi::um::fileapi::INVALID_FILE_ATTRIBUTES;
 #[cfg(windows)]
-use winapi::winnt::{FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN};
+use winapi::um::winnt::{FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_HIDDEN};
 #[cfg(windows)]
-use winapi::winerror;
+use winapi::shared::winerror;
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 
