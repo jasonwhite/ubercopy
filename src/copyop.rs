@@ -24,7 +24,9 @@ use std::fmt;
 use std::io;
 use std::time::Duration;
 
-use util;
+use crate::util;
+
+use log;
 
 /// A copy operation.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -34,7 +36,7 @@ pub struct CopyOp {
 }
 
 impl fmt::Display for CopyOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "\"{}\" -> \"{}\"",
@@ -86,10 +88,10 @@ impl CopyOp {
         // All of these must be the same in order for the copy operation to be
         // "complete".
         if a.len() != b.len() {
-            trace!("{}: length {} != {}", self, a.len(), b.len());
+            log::trace!("{}: length {} != {}", self, a.len(), b.len());
             Ok(false)
         } else if a.file_type() != b.file_type() {
-            trace!(
+            log::trace!(
                 "{}: file_type {:?} != {:?}",
                 self,
                 a.file_type(),
@@ -97,7 +99,7 @@ impl CopyOp {
             );
             Ok(false)
         } else if a.modified().unwrap() != b.modified().unwrap() {
-            trace!(
+            log::trace!(
                 "{}: modified {:?} != {:?}",
                 self,
                 a.modified().unwrap(),
@@ -105,7 +107,7 @@ impl CopyOp {
             );
             Ok(false)
         } else if a.permissions().readonly() != b.permissions().readonly() {
-            trace!(
+            log::trace!(
                 "{}: readonly {:?} != {:?}",
                 self,
                 a.permissions().readonly(),

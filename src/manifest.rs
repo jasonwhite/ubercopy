@@ -20,7 +20,7 @@
 
 use scoped_pool::Pool;
 
-use copyop::CopyOp;
+use crate::copyop::CopyOp;
 
 use std::fs::File;
 use std::io;
@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::sync_channel;
 use std::time::Duration;
 
-use util::PathExt;
+use crate::util::PathExt;
 
 /// Represents a manifest. A manifest is simply a sequence of copy operations.
 pub struct Manifest {
@@ -58,19 +58,19 @@ impl Manifest {
             let line = line.unwrap();
             let line = line.trim();
 
-            if line.is_empty() || line.starts_with("#") {
+            if line.is_empty() || line.starts_with('#') {
                 // Ignore blank lines and comments
                 continue;
             }
 
             let mut s = line.split('\t');
 
-            let src = s
-                .next()
-                .ok_or(format!("Missing source file on line {}", i + 1))?;
-            let dest = s
-                .next()
-                .ok_or(format!("Missing destination file on line {}", i + 1))?;
+            let src = s.next().ok_or_else(|| {
+                format!("Missing source file on line {}", i + 1)
+            })?;
+            let dest = s.next().ok_or_else(|| {
+                format!("Missing destination file on line {}", i + 1)
+            })?;
 
             let src_path = Path::new(src).norm();
 
@@ -109,9 +109,7 @@ impl Manifest {
         // them here so that we don't get errors about duplicate destinations.
         operations.dedup();
 
-        Ok(Manifest {
-            operations: operations,
-        })
+        Ok(Manifest { operations })
     }
 
     pub fn parse<P>(
@@ -166,7 +164,7 @@ impl Manifest {
         retries: usize,
         retry_delay: Duration,
     ) -> Result<Vec<&CopyOp>, Vec<(&CopyOp, io::Error)>> {
-        info!("Finding list of outdated copy operations");
+        log::info!("Finding list of outdated copy operations");
 
         if force {
             // Assume all files need to be copied.
@@ -199,7 +197,7 @@ impl Manifest {
         });
 
         if errors.is_empty() {
-            info!("Found {} outdated copy operations", result.len());
+            log::info!("Found {} outdated copy operations", result.len());
             Ok(result)
         } else {
             Err(errors)

@@ -23,7 +23,7 @@ use std::fmt;
 use std::io;
 use std::path::Path;
 
-use copyop::CopyOp;
+use crate::copyop::CopyOp;
 
 #[derive(Debug)]
 pub enum Error<'a> {
@@ -86,36 +86,36 @@ impl<'a> StdError for Error<'a> {
     }
 }
 
-const OVERLAP: &'static str = "\
+const OVERLAP: &str = "\
 Error: Some file(s) are both sources and destinations. This is a race
        condition. The files listed above are listed in the manifest as both
        sources and destinations.";
 
-const DUPLICATES: &'static str = "\
+const DUPLICATES: &str = "\
 Error: Duplicate destination path(s). The files listed above appear more than
        once as destinations in the manifest. This is a race condition.";
 
-const MISSING_SOURCES: &'static str = "\
+const MISSING_SOURCES: &str = "\
 Error: The source file(s) listed above are either missing or have some other
        problem. Make sure these files exist and are accessible.";
 
-const CREATE_DIRS: &'static str =
+const CREATE_DIRS: &str =
     "Error: The destination directories listed above failed to get created.";
 
-const DELETE: &'static str =
+const DELETE: &str =
     "Error: The above destination files failed to get deleted.";
 
-const DELETE_DIRS: &'static str =
+const DELETE_DIRS: &str =
     "Error: The above destination directories failed to get deleted.";
 
-const COPIES: &'static str = "Error: The copy operations listed above failed.";
+const COPIES: &str = "Error: The copy operations listed above failed.";
 
-const VERIFICATION_INCOMPLETE: &'static str = "\
+const VERIFICATION_INCOMPLETE: &str = "\
 Error: The copy operation(s) listed above are still incomplete even after
        copying them. This can happen if a file was modified by another process
        during the copy. Simply re-running the copy usually fixes it.";
 
-const VERIFICATION_ERRORS: &'static str = "\
+const VERIFICATION_ERRORS: &str = "\
 Error: Copy verification failed. The source file(s) listed above are either
        missing or have some other problem. This can happen if a source file was
        removed or changed somehow just after it was copied to the destination.
@@ -123,7 +123,7 @@ Error: Copy verification failed. The source file(s) listed above are either
        nothing else is messing with these files during the copy.";
 
 impl<'a> fmt::Display for Error<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "{}:", self.description())?;
 
         match *self {

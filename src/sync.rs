@@ -20,19 +20,21 @@
 
 use scoped_pool::Pool;
 
-use copyop::CopyOp;
-use manifest::Manifest;
+use crate::copyop::CopyOp;
+use crate::manifest::Manifest;
 
-use iter::{Change, IterExt};
+use crate::iter::{Change, IterExt};
 use std::fs;
 use std::io;
 use std::sync::mpsc::sync_channel;
 use std::time::Duration;
 
-use error::Error;
+use crate::error::Error;
+use crate::util;
+use crate::util::PathExt;
 use std::path::Path;
-use util;
-use util::PathExt;
+
+use log;
 
 /// Returns an Error result if there are race conditions. Assumes `next_srcs`
 /// and `next_dests` are sorted.
@@ -91,6 +93,7 @@ fn check_races<'a>(
 ///  6. Do a sanity check (if `sanity == true`) to make sure all timestamps are
 ///     equal and that all files exist. This is to help catch bugs in this
 ///     program.
+#[allow(clippy::too_many_arguments)]
 pub fn sync<'a>(
     prev: &'a Manifest,
     next: &'a Manifest,
@@ -101,7 +104,7 @@ pub fn sync<'a>(
     retries: usize,
     retry_delay: Duration,
 ) -> Result<usize, Error<'a>> {
-    info!("Creating thread pool with {} threads", threads);
+    log::info!("Creating thread pool with {} threads", threads);
 
     let pool = Pool::new(threads);
 
@@ -110,7 +113,7 @@ pub fn sync<'a>(
     let next_dests = next.dests();
 
     // 1. Check for race conditions.
-    info!("Checking for race conditions");
+    log::info!("Checking for race conditions");
     check_races(&next_srcs, &next_dests)?;
 
     // 2. Compare the destinations of `prev` with that of `next` to see which
@@ -124,7 +127,7 @@ pub fn sync<'a>(
 
     if dryrun {
         for f in &to_delete {
-            debug!("Deleting destination {:?}", f);
+            log::debug!("Deleting destination {:?}", f);
         }
     } else {
         // TODO: Move all this to a separate function.
@@ -132,7 +135,7 @@ pub fn sync<'a>(
 
         let failed = pool.scoped(|scope| {
             for f in &to_delete {
-                debug!("Deleting destination {:?}", f);
+                log::debug!("Deleting destination {:?}", f);
 
                 let tx = tx.clone();
                 scope.execute(move || {
@@ -170,7 +173,7 @@ pub fn sync<'a>(
             .unique();
 
         for dir in parent_dirs {
-            debug!("Deleting directory {:?}", dir);
+            log::debug!("Deleting directory {:?}", dir);
 
             if !dryrun {
                 if let Err(error) =
@@ -204,12 +207,12 @@ pub fn sync<'a>(
 
         dirs.sort();
 
-        let dirs: Vec<&Path> = dirs.iter().unique().map(|p| *p).collect();
+        let dirs: Vec<&Path> = dirs.iter().unique().cloned().collect();
 
         let mut failed: Vec<(&'a Path, io::Error)> = Vec::new();
 
         for dir in dirs {
-            debug!("Creating directory {:?}", dir);
+            log::debug!("Creating directory {:?}", dir);
 
             if !dryrun {
                 if let Err(err) = fs::create_dir_all(dir) {
@@ -224,18 +227,18 @@ pub fn sync<'a>(
     }
 
     // 5. Do the actual copy.
-    info!("Copying files...");
+    log::info!("Copying files...");
 
     if dryrun {
         for op in &outdated {
-            debug!("Copying {}", op);
+            log::debug!("Copying {}", op);
         }
     } else {
         let (tx, rx) = sync_channel(32);
 
         let failed = pool.scoped(|scope| {
             for op in &outdated {
-                debug!("Copying {}", op);
+                log::debug!("Copying {}", op);
 
                 let tx = tx.clone();
 
@@ -262,7 +265,7 @@ pub fn sync<'a>(
 
     // 6. Verify all files have been copied successfully.
     if verify_copy && !dryrun {
-        info!("Performing post-copy verification");
+        log::info!("Performing post-copy verification");
 
         // There should be *no* outdated files at this point.
         match next.outdated(false, &pool, retries, retry_delay) {

@@ -42,8 +42,8 @@ where
 {
     pub fn new(a: I, b: I) -> Self {
         let mut changes = Changes {
-            a: a,
-            b: b,
+            a,
+            b,
             next_a: None,
             next_b: None,
         };
@@ -112,10 +112,7 @@ where
     I: Iterator,
 {
     pub fn new(iter: I) -> Self {
-        let mut adj = Adjacent {
-            iter: iter,
-            prev: None,
-        };
+        let mut adj = Adjacent { iter, prev: None };
 
         adj.prev = adj.iter.next();
         adj
@@ -131,20 +128,20 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.prev.is_none() {
-            return None;
-        }
+            None
+        } else {
+            let mut count = 1;
 
-        let mut count = 1;
+            loop {
+                let elem = self.iter.next();
 
-        loop {
-            let elem = self.iter.next();
-
-            if self.prev == elem {
-                count += 1;
-            } else {
-                let ret = Some((self.prev.take().unwrap(), count));
-                self.prev = elem;
-                return ret;
+                if self.prev == elem {
+                    count += 1;
+                } else {
+                    let ret = Some((self.prev.take().unwrap(), count));
+                    self.prev = elem;
+                    return ret;
+                }
             }
         }
     }

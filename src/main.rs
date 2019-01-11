@@ -19,14 +19,10 @@
 // THE SOFTWARE.
 #[macro_use]
 extern crate clap;
-#[macro_use]
-extern crate log;
-extern crate duct;
-extern crate kernel32;
-extern crate libc;
-extern crate log4rs;
-extern crate scoped_pool;
-extern crate winapi;
+
+use duct;
+use log;
+use log4rs;
 
 mod args;
 mod copyop;
@@ -36,9 +32,9 @@ mod manifest;
 mod sync;
 mod util;
 
-use args::Args;
-use manifest::Manifest;
-use sync::sync;
+use crate::args::Args;
+use crate::manifest::Manifest;
+use crate::sync::sync;
 
 use std::env;
 use std::fs;
@@ -57,16 +53,16 @@ where
     T: AsRef<str>,
     P: AsRef<Path>,
 {
-    info!("Creating manifest {:?}", path.as_ref());
+    log::info!("Creating manifest {:?}", path.as_ref());
 
     // Open the manifest
     let f = fs::File::create(path);
     if let Err(err) = f {
-        error!("Failed to create manifest ({})", err);
+        log::error!("Failed to create manifest ({})", err);
         exit(1);
     }
 
-    info!(
+    log::info!(
         "Running process `{}` with arguments {:?} to generate manifest",
         program.as_ref(),
         args
@@ -78,7 +74,7 @@ where
         .run();
 
     if let Err(err) = output {
-        error!("Failed to generate manifest. {}", err);
+        log::error!("Failed to generate manifest. {}", err);
         exit(1);
     }
 }

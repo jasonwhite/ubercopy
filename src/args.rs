@@ -38,12 +38,12 @@ pub struct Args {
 }
 
 impl Args {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     pub fn parse() -> Self {
         let matches = App::new("ubercopy")
-            .version(crate_version!())
-            .author(crate_authors!())
-            .about(crate_description!())
+            .version(clap::crate_version!())
+            .author(clap::crate_authors!())
+            .about(clap::crate_description!())
             .setting(AppSettings::TrailingVarArg)
             .args(&[
                 Arg::with_name("dryrun")
@@ -125,9 +125,9 @@ impl Args {
                 || matches.is_present("sandbox-src"),
             sandbox_dest: matches.is_present("sandbox")
                 || matches.is_present("sandbox-dest"),
-            threads: value_t!(matches, "threads", usize)
+            threads: clap::value_t!(matches, "threads", usize)
                 .unwrap_or_else(|e| e.exit()),
-            retries: value_t!(matches, "retries", usize)
+            retries: clap::value_t!(matches, "retries", usize)
                 .unwrap_or_else(|e| e.exit()),
             dest: matches
                 .value_of("dest")
@@ -136,7 +136,7 @@ impl Args {
             program: matches.value_of("program").unwrap().to_string(),
             args: match matches.values_of("args") {
                 None => vec![],
-                Some(vals) => vals.map(|s| String::from(s)).collect(),
+                Some(vals) => vals.map(String::from).collect(),
             },
         }
     }
