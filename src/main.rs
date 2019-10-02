@@ -70,7 +70,7 @@ where
 
     // Run the command to produce the manifest.
     let output = duct::cmd(program.as_ref(), args)
-        .stdout_handle(f.unwrap())
+        .stdout_file(f.unwrap())
         .run();
 
     if let Err(err) = output {
