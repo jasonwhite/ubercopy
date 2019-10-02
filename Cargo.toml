@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33"
-duct = "0.12"
+duct = "0.13"
 winapi = "0.3"
 kernel32-sys = "0.2"
 scoped-pool = "1"
