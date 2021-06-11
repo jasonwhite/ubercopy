@@ -64,6 +64,7 @@ pub fn remove_dir(path: &Path) -> io::Result<bool> {
     match fs::remove_dir(path) {
         Err(err) => match err.raw_os_error().unwrap() as u32 {
             winerror::ERROR_FILE_NOT_FOUND => Ok(true),
+            winerror::ERROR_PATH_NOT_FOUND => Ok(true),
             winerror::ERROR_DIR_NOT_EMPTY => Ok(false),
             _ => Err(err),
         },
