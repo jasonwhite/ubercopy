@@ -124,7 +124,7 @@ Error: Copy verification failed. The source file(s) listed above are either
 
 impl<'a> fmt::Display for Error<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}:", self.description())?;
+        writeln!(f, "{}:", self.to_string())?;
 
         match *self {
             Error::Overlap(ref overlap) => {
