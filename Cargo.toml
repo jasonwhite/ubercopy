@@ -6,7 +6,7 @@ description = "A tool to quickly and intelligently copy files based on a generat
 edition = "2018"
 
 [dependencies]
-clap = "2.34"
+clap = "4.0"
 duct = "0.13"
 winapi = "0.3"
 kernel32-sys = "0.2"
